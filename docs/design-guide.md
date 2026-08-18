@@ -1,5 +1,7 @@
 # Red Alert Web 设计指南
 
+> 本文件是高层总览，各子系统的详细「设计意图 + 实现思路」见 [README.md](./README.md) 的文档导航。
+
 ## 1. 项目定位
 
 这是一个受经典即时战略游戏启发的原创网页版 RTS 原型。目标不是一次性复刻完整商业游戏，而是从一场 10 分钟以内的单机遭遇战开始，逐步扩展到完整的资源、生产、战斗和 AI 系统。
@@ -180,9 +182,12 @@ docs/
 
 加入攻击指令、射程检测、射速计时、弹道或命中效果、伤害、死亡和目标切换。
 
-### 阶段五：基地经济
+### 阶段五：基地经济（拆为两个子阶段）
 
-加入矿石、采矿车、资金、建筑放置、建造费用和生产队列。
+- **五·A 资源与建筑放置**：矿石、采矿车、资金、建筑放置、建造费用。
+- **五·B 生产队列与电力**：生产队列、电力供需与惩罚。
+
+详细拆分见 [06-economy.md](./06-economy.md)。体量较大，两个子阶段可独立验收，避免一次做完拖太久。
 
 ### 阶段六：敌方 AI
 
@@ -205,16 +210,22 @@ docs/
 - 不要让多个系统分别修改同一个资源数值；资金应由经济系统统一管理。
 - 不要把屏幕像素坐标当作寻路坐标。
 
-## 11. 第一阶段的具体任务
+## 11. 分阶段实现入口
 
-下一步按以下顺序实现：
+每个阶段的详细设计（目标、验收标准、设计意图、实现思路、风险）在独立文档里：
 
-1. 创建 `src/game/state/map.ts`，生成 32×32 的测试网格。
-2. 创建 `src/game/render/IsometricMap.ts`，绘制等距地块。
-3. 创建 `src/game/render/GameScene.ts`，加入摄像机拖动和缩放。
-4. 创建 `src/game/state/entities.ts`，加入一个可选中的测试坦克。
-5. 创建 `src/game/input/SelectionController.ts`，实现点击和框选。
-6. 创建 `src/game/systems/MovementSystem.ts`，实现右键移动。
+| 阶段 | 文档 |
+| --- | --- |
+| 总体架构与四条核心决策 | [01-architecture.md](./01-architecture.md) |
+| 一：地图、等距坐标、摄像机 | [02-map-coordinates.md](./02-map-coordinates.md) |
+| 二：单个单位移动 | [03-unit-movement.md](./03-unit-movement.md) |
+| 三：框选、A* 寻路、落点分配 | [04-selection-pathfinding.md](./04-selection-pathfinding.md) |
+| 四：战斗闭环 | [05-combat.md](./05-combat.md) |
+| 五·A：资源与建筑放置 | [06-economy.md](./06-economy.md)（§A） |
+| 五·B：生产队列与电力 | [06-economy.md](./06-economy.md)（§B） |
+| 六：敌方 AI | [07-ai.md](./07-ai.md) |
+| 七：战争迷雾与小地图 | [08-fog-minimap.md](./08-fog-minimap.md) |
+| 八：存档、回放与优化 | [09-save-replay.md](./09-save-replay.md) |
 
-完成这六项后，再开始加入 A* 寻路和障碍物。
+第一阶段（地图与移动）的具体落点：先实现 `src/game/state/map.ts`（64×64 种子地图）→ `src/game/core/`（固定 tick 循环）→ `src/game/render/`（等距投影与摄像机）→ `src/game/input/`（点击、框选、右键命令），每步对应 [02](./02-map-coordinates.md) 到 [04](./04-selection-pathfinding.md) 的验收标准。
 

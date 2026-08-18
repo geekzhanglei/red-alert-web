@@ -36,3 +36,13 @@ body {
   pointer-events: none;
 }
 
+#controls-hint {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  margin: 0;
+  color: #7d8f84;
+  font-size: 12px;
+  pointer-events: none;
+}
+
