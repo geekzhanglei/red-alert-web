@@ -10,6 +10,7 @@ export type GameResult = 'ongoing' | 'draw' | number;
 
 export function checkVictory(state: GameState): GameResult {
   if (state.gameOver) return state.winner ?? 'ongoing'; // 已结束，幂等
+  if (!state.victoryArmed) return 'ongoing';
   const alive = state.players.map((p) => hasBaseOrUnit(state, p.id));
   const p0 = alive[0];
   const p1 = alive[1];

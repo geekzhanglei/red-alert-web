@@ -18,6 +18,7 @@ export class Game {
   constructor(public readonly state: GameState) {}
 
   update(dtMs: number): void {
+    if (this.state.gameOver) return;
     const dt = dtMs / 1000;
     processCommands(this.state);
     updateEconomy(this.state, dt);

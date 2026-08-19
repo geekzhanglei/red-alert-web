@@ -55,6 +55,8 @@ export interface GameState {
   /** 战争迷雾：每玩家一张 Uint8Array。 */
   visibility: VisibilityState;
   /** 胜负状态：false=进行中；true=已结束，winner 是胜者 playerId 或 'draw'。 */
+  /** 双方基地都曾建立后才进入可判定状态，避免单元测试/沙盒局被误判结束。 */
+  victoryArmed: boolean;
   gameOver: boolean;
   winner: number | 'draw' | null;
 }
@@ -100,6 +102,7 @@ export function createInitialGameState(options?: GameOptions): GameState {
     commandLog: [],
     events: [],
     visibility: createVisibility(width, height, playerIds),
+    victoryArmed: false,
     gameOver: false,
     winner: null, // null = 进行中；游戏未结束前不会读这个值
   };

@@ -19,6 +19,7 @@ function fingerprint(s: ReturnType<typeof createInitialGameState>): string {
     money: s.players.map((p) => p.money).join(','),
     fogSum: s.visibility.perPlayer.map((a) => Array.from(a).reduce((s, b) => s + b, 0)).join(','),
     aiBrains: JSON.stringify(s.aiBrains),
+    victoryArmed: s.victoryArmed,
     cmdLog: s.commandLog.length,
   });
 }

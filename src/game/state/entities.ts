@@ -121,7 +121,17 @@ export function spawnBuilding(state: GameState, typeId: string, ownerId: number,
   state.entities[id] = e;
   state.entitiesOrder.push(id);
   occupy(state, e, tiles);
+  if (typeId === 'base' && state.players.every((p) => hasBase(state, p.id))) {
+    state.victoryArmed = true;
+  }
   return e;
+}
+
+function hasBase(state: GameState, playerId: number): boolean {
+  return state.entitiesOrder.some((id) => {
+    const entity = state.entities[id];
+    return entity?.type === 'building' && entity.typeId === 'base' && entity.ownerId === playerId;
+  });
 }
 
 /** 让实体占用指定格子（写 occupiedBy 并记录 occupiedTiles）。被占用的格会阻塞寻路。 */

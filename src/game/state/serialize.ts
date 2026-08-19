@@ -63,6 +63,7 @@ function toPlain(state: GameState) {
       perPlayer: state.visibility.perPlayer.map((arr) => Array.from(arr)),
       // playerIdToIndex 重新从 players 推：0,1,2… 顺序固定
     },
+    victoryArmed: state.victoryArmed,
     gameOver: state.gameOver,
     winner: state.winner,
   };
@@ -137,6 +138,7 @@ function fromPlain(p: ReturnType<typeof toPlain>): GameState {
       perPlayer: p.visibility.perPlayer.map((arr) => Uint8Array.from(arr)),
       playerIdToIndex: new Map(players.map((pl, i) => [pl.id, i])),
     },
+    victoryArmed: p.victoryArmed ?? false,
     gameOver: p.gameOver,
     winner: p.winner,
   };
