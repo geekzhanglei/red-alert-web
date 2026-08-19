@@ -17,7 +17,7 @@ export function loadAllSprites(scene: Phaser.Scene): void {
   for (const o of [0, 1]) {
     scene.load.image(`unit_infantry_${o}`, SPRITES.infantry(o));
     scene.load.image(`unit_tank_${o}`, o === 0 ? '/assets/original/unit-tank.png' : SPRITES.tank(o));
-    scene.load.image(`unit_harvester_${o}`, SPRITES.harvester(o));
+    scene.load.image(`unit_harvester_${o}`, o === 0 ? '/assets/original/unit-harvester.png' : SPRITES.harvester(o));
   }
   // 建筑
   for (const o of [0, 1]) {
