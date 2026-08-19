@@ -16,6 +16,16 @@ export interface PlayerState {
   powerConsumed: number; // 阶段五·B：由各建筑消耗
 }
 
+/** AI 战略状态属于可回放/可存档的逻辑状态，不能放在模块级缓存中。 */
+export interface AiBrainState {
+  state: 'develop' | 'buildUp' | 'attack' | 'defend';
+  nextThinkTick: number;
+  attackThreshold: number;
+  buildIndex: number;
+  threatThreshold: number;
+  lastRepairTick: number;
+}
+
 /**
  * 全项目唯一的状态容器：核心系统只读写它，渲染层只读它。
  * 必须保持「纯数据」——不含任何 Phaser/DOM 引用，否则存档序列化会被卡住（见 docs/01-architecture.md）。
@@ -29,6 +39,7 @@ export interface GameState {
   /** 建筑定义表（数据驱动），运行期只读。 */
   buildingDefs: BuildingDefinitionMap;
   players: PlayerState[];
+  aiBrains: Record<number, AiBrainState>;
   nextEntityId: number;
   /** 实体表；迭代一律走 entitiesOrder，保证顺序稳定（决策四）。 */
   entities: Record<number, EntityState>;
@@ -43,6 +54,9 @@ export interface GameState {
   events: GameEvent[];
   /** 战争迷雾：每玩家一张 Uint8Array。 */
   visibility: VisibilityState;
+  /** 胜负状态：false=进行中；true=已结束，winner 是胜者 playerId 或 'draw'。 */
+  gameOver: boolean;
+  winner: number | 'draw' | null;
 }
 
 export interface GameOptions {
@@ -77,6 +91,7 @@ export function createInitialGameState(options?: GameOptions): GameState {
       { id: 0, money: PLAYER_START_MONEY, powerProduced: 0, powerConsumed: 0 },
       { id: 1, money: ENEMY_START_MONEY, powerProduced: 0, powerConsumed: 0 },
     ],
+    aiBrains: {},
     nextEntityId: 1,
     entities: {},
     entitiesOrder: [],
@@ -85,6 +100,8 @@ export function createInitialGameState(options?: GameOptions): GameState {
     commandLog: [],
     events: [],
     visibility: createVisibility(width, height, playerIds),
+    gameOver: false,
+    winner: null, // null = 进行中；游戏未结束前不会读这个值
   };
   if (options?.testUnits !== false) spawnTestSetup(state);
   return state;

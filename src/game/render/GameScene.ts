@@ -11,8 +11,9 @@ import { CameraController } from '../input/CameraController';
 import { SelectionController } from '../input/SelectionController';
 import { BuildingPlacementController } from '../input/BuildingPlacementController';
 import { canAfford } from '../state/players';
-import { enqueueTrain } from '../systems/production';
 import { Minimap } from './Minimap';
+import { ResultOverlay } from '../../ui/ResultOverlay';
+import { loadAllSprites } from '../../assets/loadSprites';
 
 const TERRAIN_NAMES: Record<Terrain, string> = {
   grass: '草地',
@@ -40,6 +41,8 @@ export class GameScene extends Phaser.Scene {
   private moneyEl: HTMLElement | null = null;
   private prodPanelEl: HTMLElement | null = null;
   private buildButtons: HTMLButtonElement[] = [];
+  private resultOverlay = new ResultOverlay();
+  private prodPanelStructureKey = '';
 
   constructor() {
     super('game');
@@ -48,8 +51,15 @@ export class GameScene extends Phaser.Scene {
   create(): void {
     this.sim = new Game(createInitialGameState());
 
+    // 预加载原创贴图（docs/01-architecture.md 决策三）
+    loadAllSprites(this);
+
     this.mapRenderer = new MapRenderer(this);
-    this.mapRenderer.init(this, this.sim.state.map);
+    // 等纹理全部加载完成后再建地形贴图层（否则 first frame 走兜底）
+    this.load.once('complete', () => {
+      this.mapRenderer.init(this, this.sim.state.map);
+    });
+    this.load.start();
     this.buildings = new BuildingRenderer(this);
     this.units = new UnitRenderer(this);
     this.minimap = new Minimap(this, this.sim.state);
@@ -69,6 +79,7 @@ export class GameScene extends Phaser.Scene {
     this.selectionInfoEl = document.getElementById('selection-info');
     this.moneyEl = document.getElementById('money');
     this.prodPanelEl = document.getElementById('prod-panel');
+    this.prodPanelEl?.addEventListener('click', (event) => this.handleProductionClick(event));
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.updateTileInfo(p));
     this.wireBuildBar();
   }
@@ -76,7 +87,7 @@ export class GameScene extends Phaser.Scene {
   update(_time: number, delta: number): void {
     this.loop.frame(delta);
     // 建筑先画（背景），单位后画（前景角色），与等距遮挡一致
-    this.buildings.update(this.sim.state);
+    this.buildings.update(this.sim.state, PLAYER_ID);
     this.units.update(this.sim.state, this.loop.alpha, PLAYER_ID);
     this.mapRenderer.updateFog(this.sim.state, PLAYER_ID);
     this.minimap.update(this.sim.state);
@@ -86,6 +97,7 @@ export class GameScene extends Phaser.Scene {
     this.updateMoney();
     this.updateProdPanel();
     this.refreshBuildButtons();
+    this.resultOverlay.update(this.sim.state);
   }
 
   private tick(): void {
@@ -116,7 +128,7 @@ export class GameScene extends Phaser.Scene {
       if (!def) continue;
       const affordable = canAfford(this.sim.state, PLAYER_ID, def.cost);
       btn.disabled = !affordable;
-      btn.classList.toggle('active', this.placement.isActive() && this.placement['selected']?.id === def.id);
+      btn.classList.toggle('active', this.placement.isActive() && this.placement.selectedId() === def.id);
     }
   }
 
@@ -132,7 +144,8 @@ export class GameScene extends Phaser.Scene {
     const sel = state.selectedEntityIds[0];
     const b = sel != null ? state.entities[sel] : null;
     if (!b || b.type !== 'building' || b.ownerId !== PLAYER_ID) {
-      this.prodPanelEl.innerHTML = '';
+      if (this.prodPanelStructureKey !== '') this.prodPanelEl.innerHTML = '';
+      this.prodPanelStructureKey = '';
       this.prodPanelEl.style.display = 'none';
       return;
     }
@@ -140,36 +153,59 @@ export class GameScene extends Phaser.Scene {
     const def = state.buildingDefs[b.typeId];
     const player = state.players[PLAYER_ID];
     const powerShort = player.powerConsumed > player.powerProduced;
-    let html = `<div class="prod-title">${def.name} #${b.id}</div>`;
-    html += `<div class="prod-power">电力 ${player.powerProduced}/${player.powerConsumed}${powerShort ? ' · 缺电（生产×2）' : ''}</div>`;
-    if (b.productionQueue.length > 0) {
-      const producing = b.productionQueue[0];
-      const unitDef = state.defs[producing];
-      const ticks = unitDef.buildTicks * (powerShort ? 2 : 1);
-      const pct = Math.min(100, Math.floor((b.productionProgress / ticks) * 100));
-      html += `<div class="prod-row"><span>${unitDef.name}</span><div class="prod-bar"><div style="width:${pct}%"></div></div></div>`;
-      for (let i = 1; i < b.productionQueue.length; i++) {
-        const q = b.productionQueue[i];
-        html += `<div class="prod-row"><span>${state.defs[q].name}</span><span style="color:#a0b0a6">排队</span></div>`;
+    const structureKey = `${b.id}|${b.typeId}|${b.productionQueue.join(',')}`;
+    if (structureKey !== this.prodPanelStructureKey) {
+      let html = `<div class="prod-title">${def.name} #${b.id}</div>`;
+      html += `<div class="prod-power" data-prod-power></div>`;
+      if (b.productionQueue.length === 0) {
+        html += `<div data-prod-queue><div style="color:#a0b0a6;margin:4px 0">无生产</div></div>`;
+      } else {
+        const producing = b.productionQueue[0];
+        const unitDef = state.defs[producing];
+        html += `<div data-prod-queue><div class="prod-row"><span>${unitDef.name}</span><div class="prod-bar"><div data-prod-progress></div></div></div>`;
+        html += b.productionQueue
+          .slice(1)
+          .map((q) => `<div class="prod-row"><span>${state.defs[q].name}</span><span style="color:#a0b0a6">排队</span></div>`)
+          .join('');
+        html += `</div>`;
       }
-    } else {
-      html += `<div style="color:#a0b0a6;margin:4px 0">无生产</div>`;
+      html += `<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">`;
+      for (const unitId of def.produces) {
+        const unitDef = state.defs[unitId];
+        html += `<button data-train="${unitId}" data-building="${b.id}">${unitDef.name} $${unitDef.cost}</button>`;
+      }
+      html += `</div>`;
+      this.prodPanelEl.innerHTML = html;
+      this.prodPanelStructureKey = structureKey;
     }
-    html += `<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">`;
-    for (const unitId of def.produces) {
-      const unitDef = state.defs[unitId];
-      const ok = state.players[PLAYER_ID].money >= unitDef.cost;
-      html += `<button data-train="${unitId}" data-building="${b.id}" ${ok ? '' : 'disabled'}>${unitDef.name} $${unitDef.cost}</button>`;
+    const powerEl = this.prodPanelEl.querySelector<HTMLElement>('[data-prod-power]');
+    if (powerEl) powerEl.textContent = `电力 ${player.powerProduced}/${player.powerConsumed}${powerShort ? ' · 缺电（生产×2）' : ''}`;
+    const queueEl = this.prodPanelEl.querySelector<HTMLElement>('[data-prod-queue]');
+    if (queueEl && structureKey === this.prodPanelStructureKey) {
+      const producing = b.productionQueue[0];
+      if (producing) {
+        const unitDef = state.defs[producing];
+        const ticks = unitDef.buildTicks * (powerShort ? 2 : 1);
+        const pct = Math.min(100, Math.floor((b.productionProgress / ticks) * 100));
+        const progressEl = queueEl.querySelector<HTMLElement>('[data-prod-progress]');
+        if (progressEl) progressEl.style.width = `${pct}%`;
+      }
     }
-    html += `</div>`;
-    this.prodPanelEl.innerHTML = html;
-    // 绑定训练按钮：直接调用 enqueueTrain（同步操作不需要走 pendingCommands）
     this.prodPanelEl.querySelectorAll<HTMLButtonElement>('button[data-train]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const buildingId = Number(btn.dataset.building);
-        const unitId = btn.dataset.train!;
-        enqueueTrain(this.sim.state, buildingId, PLAYER_ID, unitId);
-      });
+      const unit = state.defs[btn.dataset.train ?? ''];
+      if (unit) btn.disabled = player.money < unit.cost;
+    });
+  }
+
+  private handleProductionClick(event: Event): void {
+    const target = event.target as HTMLElement;
+    const btn = target.closest<HTMLButtonElement>('button[data-train]');
+    if (!btn) return;
+    this.sim.state.pendingCommands.push({
+      type: 'train',
+      playerId: PLAYER_ID,
+      buildingId: Number(btn.dataset.building),
+      unitTypeId: btn.dataset.train ?? '',
     });
   }
 

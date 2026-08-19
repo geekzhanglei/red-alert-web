@@ -74,4 +74,16 @@ describe('AI 战略层', () => {
     );
     expect(defCmd).toBeDefined();
   });
+
+  it('AI 有兵营且资金足够时会把训练加入统一命令流', () => {
+    const game = new Game(createInitialGameState({ testUnits: false }));
+    game.state.map = makeFlatMap(30, 30);
+    spawnBuilding(game.state, 'base', 1, 20, 20);
+    spawnBuilding(game.state, 'barracks', 1, 10, 10);
+    game.state.players[1].money = 1000;
+
+    for (let i = 0; i < 70; i++) game.update(TICK_MS);
+
+    expect(game.state.commandLog.some((entry) => entry.command.type === 'train')).toBe(true);
+  });
 });

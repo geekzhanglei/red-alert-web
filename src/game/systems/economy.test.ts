@@ -4,7 +4,8 @@ import { Game } from '../core/Game';
 import { createInitialGameState } from '../state/GameState';
 import { spawnBuilding, spawnUnit } from '../state/entities';
 import { canAfford, changeMoney } from '../state/players';
-import { canPlace } from '../state/commands';
+import { canPlace, processCommands } from '../state/commands';
+import { updateCombat } from './combat';
 import { ORE_UNIT_VALUE } from './economy';
 import { MapState } from '../state/map';
 
@@ -123,13 +124,21 @@ describe('建筑放置（build 命令）', () => {
   });
 
   it('建筑可被攻击摧毁并释放全部占格', () => {
+    // 不走 Game.update（AI 修理会防止死亡），手动调战斗系统
     const game = new Game(createInitialGameState({ testUnits: false }));
     game.state.map = makeMap(10, 10);
+    // 隔离 AI：去掉玩家 1，避免 AI 修理
+    game.state.players = [{ id: 0, money: 5000, powerProduced: 0, powerConsumed: 0 }];
     const b = spawnBuilding(game.state, 'refinery', 1, 2, 2);
     const a = spawnUnit(game.state, 'tank', 0, 2, 1);
     game.state.pendingCommands.push({ type: 'attack', playerId: 0, entityId: a.id, targetEntityId: b.id });
     // 坦克打建筑 15×1.25=18.75/发，600hp → 32 发 × 45 tick = ~1440 tick
-    for (let i = 0; i < 2000; i++) game.update(TICK_MS);
+    // 手动跑 processCommands + updateCombat（不调 updateAi / updateRepair）
+    for (let i = 0; i < 2000; i++) {
+      processCommands(game.state);
+      updateCombat(game.state, 0.05);
+      game.state.tick++;
+    }
     expect(game.state.entities[b.id]).toBeUndefined();
     // footprint 全部释放
     for (let dy = 0; dy < 2; dy++) {

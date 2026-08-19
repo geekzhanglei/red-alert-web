@@ -3,7 +3,7 @@ import { TICK_MS } from '../core/GameLoop';
 import { Game } from '../core/Game';
 import { createInitialGameState } from '../state/GameState';
 import { spawnBuilding } from '../state/entities';
-import { enqueueTrain, recomputePower } from '../systems/production';
+import { enqueueTrain, recomputePower, updateProduction } from '../systems/production';
 import { MapState } from '../state/map';
 
 function makeFlatMap(width: number, height: number): MapState {
@@ -90,5 +90,27 @@ describe('生产与电力', () => {
     spawnBuilding(game.state, 'barracks', 0, 5, 5);
     recomputePower(game.state);
     expect(game.state.players[0].powerConsumed).toBe(20);
+  });
+
+  it('出生点被堵住时保留已完成队列，空位出现后再出兵', () => {
+    const game = new Game(createInitialGameState({ testUnits: false }));
+    game.state.map = makeFlatMap(3, 3);
+    const base = spawnBuilding(game.state, 'base', 0, 0, 0);
+    expect(enqueueTrain(game.state, base.id, 0, 'harvester')).toBe(true);
+
+    // 3×3 基地占满整张地图，周围没有任何出生点。
+    for (let i = 0; i < 180; i++) updateProduction(game.state);
+    expect(base.productionQueue).toEqual(['harvester']);
+    expect(base.productionProgress).toBe(180);
+
+    // 扩出一列空地后，下一次生产更新应成功重试。
+    const expanded = makeFlatMap(4, 3);
+    for (let y = 0; y < 3; y++) {
+      for (let x = 0; x < 3; x++) expanded.tiles[y * 4 + x].occupiedBy = base.id;
+    }
+    game.state.map = expanded;
+    updateProduction(game.state);
+    expect(base.productionQueue).toEqual([]);
+    expect(game.state.entitiesOrder.some((id) => game.state.entities[id]?.typeId === 'harvester')).toBe(true);
   });
 });

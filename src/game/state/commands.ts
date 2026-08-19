@@ -5,6 +5,7 @@ import { findPath } from '../pathfinding/AStar';
 import { tileAt } from './map';
 import { canAfford, changeMoney } from './players';
 import type { BuildingDefinition } from '../data/buildings';
+import { enqueueTrain } from '../systems/production';
 
 /**
  * 玩家的操作统一编码成命令（docs/01-architecture.md 决策四）。
@@ -15,6 +16,7 @@ export type GameCommand =
   | { type: 'move'; playerId: number; entityId: number; targetX: number; targetY: number }
   | { type: 'attack'; playerId: number; entityId: number; targetEntityId: number }
   | { type: 'build'; playerId: number; buildingTypeId: string; x: number; y: number }
+  | { type: 'train'; playerId: number; buildingId: number; unitTypeId: string }
   | { type: 'stop'; playerId: number; entityId: number };
 
 /**
@@ -95,6 +97,9 @@ export function processCommands(state: GameState): void {
         spawnBuilding(state, cmd.buildingTypeId, ownerId, cmd.x, cmd.y);
         break;
       }
+      case 'train':
+        enqueueTrain(state, cmd.buildingId, cmd.playerId, cmd.unitTypeId);
+        break;
       case 'stop': {
         const e = state.entities[cmd.entityId];
         if (!e || e.type !== 'unit') break;

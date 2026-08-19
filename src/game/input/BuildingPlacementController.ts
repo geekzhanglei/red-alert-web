@@ -27,7 +27,9 @@ export class BuildingPlacementController {
     private game: Game,
     private cam: Phaser.Cameras.Scene2D.Camera,
   ) {
-    this.ghost = scene.add.graphics().setScrollFactor(0).setDepth(90).setVisible(false);
+    // ghost 使用世界坐标绘制；label 才是跟随屏幕指针的 HUD 元素。
+    // 如果给 ghost 设置 scrollFactor(0)，镜头平移/缩放后会与实际落点错位。
+    this.ghost = scene.add.graphics().setDepth(90).setVisible(false);
     this.label = scene.add
       .text(0, 0, '', { fontFamily: 'system-ui', fontSize: '12px', color: '#e8edf2' })
       .setScrollFactor(0)
@@ -65,6 +67,10 @@ export class BuildingPlacementController {
 
   isActive(): boolean {
     return this.active;
+  }
+
+  selectedId(): string | null {
+    return this.selected?.id ?? null;
   }
 
   /** 每帧调用：根据当前鼠标重画 ghost（合法绿色/非法红色）与费用标签。 */

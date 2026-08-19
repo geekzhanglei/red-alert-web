@@ -29,11 +29,13 @@ export function updateProduction(state: GameState): void {
     const player = state.players[e.ownerId];
     const powerShort = player.powerConsumed > player.powerProduced;
     const ticks = def.buildTicks * (powerShort ? 2 : 1);
-    e.productionProgress++;
+    e.productionProgress = Math.min(ticks, e.productionProgress + 1);
     if (e.productionProgress >= ticks) {
-      e.productionQueue.shift();
-      e.productionProgress = 0;
-      trySpawn(state, e, producingId);
+      // 出生点被堵住时保持队列和完成进度，等下一个 tick 重试，不能静默丢兵。
+      if (trySpawn(state, e, producingId)) {
+        e.productionQueue.shift();
+        e.productionProgress = 0;
+      }
     }
   }
 }
@@ -56,11 +58,12 @@ export function recomputePower(state: GameState): void {
 }
 
 /** 在建筑 footprint 外沿找最近的可走空闲格生产单位。 */
-function trySpawn(state: GameState, e: EntityState, unitTypeId: string): void {
+function trySpawn(state: GameState, e: EntityState, unitTypeId: string): boolean {
   const def = state.buildingDefs[e.typeId];
   const spot = findSpawnSpot(state, e, def.footprint.w, def.footprint.h);
-  if (!spot) return; // 无出生点（被围死）→ 暂时不出，等条件好；这里简化：直接放最外层可走格
+  if (!spot) return false;
   spawnUnit(state, unitTypeId, e.ownerId, spot.x + 0.5, spot.y + 0.5);
+  return true;
 }
 
 function findSpawnSpot(state: GameState, e: EntityState, w: number, h: number): GridPoint | null {

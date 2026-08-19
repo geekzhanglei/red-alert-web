@@ -1,4 +1,4 @@
-import { GameState } from '../state/GameState';
+import { AiBrainState, GameState } from '../state/GameState';
 import { EntityState } from '../state/entities';
 import { canAfford } from '../state/players';
 import { GridPoint } from '../pathfinding/AStar';
@@ -16,30 +16,18 @@ const STRATEGIC_PERIOD = 30; // 战略层每 30 tick 醒一次（约 1.5 秒）
 const DEFAULT_BUILD_ORDER = ['refinery', 'power_proxy', 'barracks', 'power_proxy', 'factory', 'power_proxy'];
 // power_proxy = 基地（AI 已建）；下面 replace_power_proxy 用基地替代「多建电厂」
 
-interface AiBrain {
-  state: 'develop' | 'buildUp' | 'attack' | 'defend';
-  nextThinkTick: number;
-  attackThreshold: number;
-  buildIndex: number;
-}
-
-const brains: WeakMap<GameState, Map<number, AiBrain>> = new WeakMap();
-
-function getBrain(state: GameState, playerId: number): AiBrain {
-  let m = brains.get(state);
-  if (!m) {
-    m = new Map();
-    brains.set(state, m);
-  }
-  let b = m.get(playerId);
+function getBrain(state: GameState, playerId: number): AiBrainState {
+  let b = state.aiBrains[playerId];
   if (!b) {
     b = {
       state: 'develop',
       nextThinkTick: 60, // 给玩家一点初始优势
       attackThreshold: 4,
       buildIndex: 0,
+      threatThreshold: 3, // 视野内看到 ≥3 个玩家单位就迎击
+      lastRepairTick: 0,
     };
-    m.set(playerId, b);
+    state.aiBrains[playerId] = b;
   }
   return b;
 }
@@ -56,7 +44,7 @@ export function updateAi(state: GameState): void {
   tacticalAct(state);
 }
 
-function strategicThink(state: GameState, brain: AiBrain, pid: number): void {
+function strategicThink(state: GameState, brain: AiBrainState, pid: number): void {
   // 1) 受袭检测：己方建筑在挨打 → 转 defend
   if (anyBuildingUnderAttack(state, pid)) {
     brain.state = 'defend';
@@ -69,14 +57,16 @@ function strategicThink(state: GameState, brain: AiBrain, pid: number): void {
   }
   // 4) 建筑建造（按 buildOrder）
   ensureBuildingConstruction(state, brain, pid);
-  // 5) 兵力攒到阈值转 buildUp，再集结一些
+  // 5) 有生产建筑就持续补充单位；训练也走 pendingCommands，保证回放一致。
+  ensureUnitProduction(state, pid);
+  // 6) 兵力攒到阈值转 buildUp，再集结一些
   if (brain.state === 'develop' && myAttackUnits >= brain.attackThreshold) {
     brain.state = 'buildUp';
   }
   if (brain.state === 'buildUp' && myAttackUnits >= brain.attackThreshold + 2) {
     brain.state = 'attack';
   }
-  // 6) 进攻：给 attack 单位指派目标
+  // 7) 进攻：给 attack 单位指派目标
   if (brain.state === 'attack') {
     const target = findAttackTarget(state, pid);
     if (target) {
@@ -93,28 +83,70 @@ function strategicThink(state: GameState, brain: AiBrain, pid: number): void {
   }
 }
 
+function ensureUnitProduction(state: GameState, pid: number): void {
+  for (const id of state.entitiesOrder) {
+    const b = state.entities[id];
+    if (!b || b.type !== 'building' || b.ownerId !== pid) continue;
+    const produces = state.buildingDefs[b.typeId]?.produces ?? [];
+    if (produces.length === 0 || b.productionQueue.length >= 2) continue;
+    const alreadyQueued = state.pendingCommands.some(
+      (cmd) => cmd.type === 'train' && cmd.buildingId === b.id,
+    );
+    if (alreadyQueued) continue;
+    const unitTypeId = produces[0];
+    if (canAfford(state, pid, state.defs[unitTypeId]?.cost ?? Infinity)) {
+      state.pendingCommands.push({ type: 'train', playerId: pid, buildingId: b.id, unitTypeId });
+    }
+  }
+}
+
 function tacticalAct(state: GameState): void {
-  // 受袭时把 idle 攻击单位调回去打最近的敌方单位
   for (let pid = 1; pid < state.players.length; pid++) {
-    if (!anyBuildingUnderAttack(state, pid)) continue;
-    const attacker = findNearestEnemyToOwnBuildings(state, pid);
-    if (!attacker) continue;
-    for (const e of state.entitiesOrder.map((id) => state.entities[id])) {
-      if (
-        e &&
-        e.type === 'unit' &&
-        e.ownerId === pid &&
-        state.defs[e.typeId].weapon &&
-        e.attackTargetId == null &&
-        e.activity === 'idle'
-      ) {
-        state.pendingCommands.push({ type: 'attack', playerId: pid, entityId: e.id, targetEntityId: attacker.id });
+    const brain = getBrain(state, pid);
+    // Step 1 反制：AI 视野内玩家单位 ≥ 阈值 → 立即派所有 idle 战斗单位迎击
+    const enemiesInView = countEnemyUnitsInView(state, pid);
+    if (enemiesInView >= brain.threatThreshold) {
+      // 找视野内最近的玩家单位作为攻击目标
+      const target = findNearestEnemyInView(state, pid);
+      if (target) {
+        for (const e of state.entitiesOrder.map((id) => state.entities[id])) {
+          if (
+            e &&
+            e.type === 'unit' &&
+            e.ownerId === pid &&
+            state.defs[e.typeId].weapon &&
+            e.activity === 'idle'
+          ) {
+            state.pendingCommands.push({ type: 'attack', playerId: pid, entityId: e.id, targetEntityId: target.id });
+          }
+        }
+      }
+      // 持续受威胁：让 brain 走出 develop → attack 状态
+      if (brain.state === 'develop' || brain.state === 'buildUp') brain.state = 'attack';
+    }
+
+    // 原来的「己方建筑受袭 → 回防」逻辑保留
+    if (anyBuildingUnderAttack(state, pid)) {
+      const attacker = findNearestEnemyToOwnBuildings(state, pid);
+      if (attacker) {
+        for (const e of state.entitiesOrder.map((id) => state.entities[id])) {
+          if (
+            e &&
+            e.type === 'unit' &&
+            e.ownerId === pid &&
+            state.defs[e.typeId].weapon &&
+            e.attackTargetId == null &&
+            e.activity === 'idle'
+          ) {
+            state.pendingCommands.push({ type: 'attack', playerId: pid, entityId: e.id, targetEntityId: attacker.id });
+          }
+        }
       }
     }
   }
 }
 
-function ensureBuildingConstruction(state: GameState, brain: AiBrain, pid: number): void {
+function ensureBuildingConstruction(state: GameState, brain: AiBrainState, pid: number): void {
   while (brain.buildIndex < DEFAULT_BUILD_ORDER.length) {
     const item = DEFAULT_BUILD_ORDER[brain.buildIndex];
     if (item === 'power_proxy') {
@@ -250,4 +282,64 @@ function isBuildableBlock(state: GameState, x: number, y: number, w: number, h: 
     }
   }
   return true;
+}
+
+/** 视野内敌人单位数（每帧都查；O(n) 足够了，规模大了再上空间索引）。 */
+function countEnemyUnitsInView(state: GameState, pid: number): number {
+  const myIdx = state.visibility.playerIdToIndex.get(pid);
+  if (myIdx === undefined) return 0;
+  const fog = state.visibility.perPlayer[myIdx];
+  const w = state.map.width;
+  let n = 0;
+  for (const eid of state.entitiesOrder) {
+    const e = state.entities[eid];
+    if (!e || e.type !== 'unit' || e.ownerId === pid) continue;
+    const idx = e.tileY * w + e.tileX;
+    // 仅 FOG_VISIBLE(2) 才算「看见」
+    if ((fog[idx] ?? 0) >= 2) n++;
+  }
+  return n;
+}
+
+function findNearestEnemyInView(state: GameState, pid: number): EntityState | null {
+  const myIdx = state.visibility.playerIdToIndex.get(pid);
+  if (myIdx === undefined) return null;
+  const fog = state.visibility.perPlayer[myIdx];
+  const w = state.map.width;
+  const myCenter = findPlayerCenter(state, pid);
+  let best: EntityState | null = null;
+  let bestD = Infinity;
+  for (const eid of state.entitiesOrder) {
+    const e = state.entities[eid];
+    if (!e || e.ownerId === pid) continue;
+    if ((fog[e.tileY * w + e.tileX] ?? 0) < 2) continue;
+    const d = Math.max(Math.abs(e.tileX - myCenter.x), Math.abs(e.tileY - myCenter.y));
+    if (d < bestD) {
+      bestD = d;
+      best = e;
+    }
+  }
+  return best;
+}
+
+/**
+ * 修理系统（Step 1 简化版）：受削血建筑每 60 tick 自愈 5% maxHp，不依赖维修单位。
+ * 经济允许时 AI 还会指挥「维修单位」回防，但本阶段先做最便宜的版本。
+ */
+const REPAIR_PERIOD_TICKS = 60;
+const REPAIR_RATIO = 0.05;
+
+export function updateRepair(state: GameState): void {
+  for (let pid = 1; pid < state.players.length; pid++) {
+    const brain = getBrain(state, pid);
+    if (state.tick - brain.lastRepairTick < REPAIR_PERIOD_TICKS) continue;
+    brain.lastRepairTick = state.tick;
+    for (const eid of state.entitiesOrder) {
+      const e = state.entities[eid];
+      if (!e || e.type !== 'building' || e.ownerId !== pid) continue;
+      const def = state.buildingDefs[e.typeId];
+      if (e.hp >= def.maxHp) continue;
+      e.hp = Math.min(def.maxHp, e.hp + Math.ceil(def.maxHp * REPAIR_RATIO));
+    }
+  }
 }
