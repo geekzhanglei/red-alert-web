@@ -23,27 +23,35 @@ function snapshot(game: Game): { tick: number; positions: Record<string, [number
 
 describe('确定性：命令回放', () => {
   it('按命令日志重放得到相同终局', () => {
+    const makeGame = () => {
+      const game = new Game(createInitialGameState({ testUnits: false }));
+      const a = spawnUnit(game.state, 'infantry', 0, 5, 5);
+      const b = spawnUnit(game.state, 'infantry', 0, 7, 5);
+      const c = spawnUnit(game.state, 'infantry', 0, 5, 8);
+      return { game, a, b, c };
+    };
+
     // A 局：正常跑，收集命令日志
-    const gameA = new Game(createInitialGameState());
-    gameA.state.pendingCommands.push(move(0, 1, 40, 35), move(0, 2, 20, 25), move(0, 3, 36, 20));
+    const A = makeGame();
+    A.game.state.pendingCommands.push(move(0, A.a.id, 20, 15), move(0, A.b.id, 18, 18), move(0, A.c.id, 22, 12));
     for (let i = 0; i < TOTAL_TICKS; i++) {
-      if (i === 150) gameA.state.pendingCommands.push(move(0, 1, 44, 44));
-      gameA.update(TICK_MS);
+      if (i === 150) A.game.state.pendingCommands.push(move(0, A.a.id, 24, 24));
+      A.game.update(TICK_MS);
     }
-    const log = gameA.state.commandLog.map((l) => ({ tick: l.tick, command: l.command }));
-    const finalA = snapshot(gameA);
+    const log = A.game.state.commandLog.map((l) => ({ tick: l.tick, command: l.command }));
+    const finalA = snapshot(A.game);
 
     // B 局：同 seed 重建，按日志在对应 tick 注入命令重放
-    const gameB = new Game(createInitialGameState());
+    const B = makeGame();
     let idx = 0;
     for (let i = 0; i < TOTAL_TICKS; i++) {
       while (idx < log.length && log[idx].tick === i) {
-        gameB.state.pendingCommands.push(log[idx].command);
+        B.game.state.pendingCommands.push(log[idx].command);
         idx++;
       }
-      gameB.update(TICK_MS);
+      B.game.update(TICK_MS);
     }
-    const finalB = snapshot(gameB);
+    const finalB = snapshot(B.game);
 
     expect(finalA.tick).toBe(finalB.tick);
     expect(finalA.positions).toEqual(finalB.positions);

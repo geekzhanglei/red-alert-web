@@ -41,7 +41,7 @@ export class SelectionController {
         this.pressY = p.y;
         this.pressed = true;
       }
-      if (p.rightButtonDown()) this.issueMove(p);
+      if (p.rightButtonDown()) this.onRightClick(p);
     });
     scene.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       if (!this.pressed || !p.leftButtonDown()) return;
@@ -64,10 +64,10 @@ export class SelectionController {
     });
   }
 
-  /** 点击：选中最上层单位；点空白清空选择。 */
+  /** 点击：选中最上层己方单位；点空白清空选择。 */
   private selectAt(p: Phaser.Input.Pointer): void {
     const world = this.cam.getWorldPoint(p.x, p.y);
-    const hit = this.findTopmostUnit(world.x, world.y);
+    const hit = this.findTopmostUnit(world.x, world.y, PLAYER_ID);
     this.game.state.selectedEntityIds = hit ? [hit.id] : [];
   }
 
@@ -104,18 +104,28 @@ export class SelectionController {
     this.box.setVisible(true);
   }
 
-  /** 找到点击位置附近最上层的单位（渲染按 x+y 深度，最上层近似 = 列表末尾；阶段三用世界点就近即可）。 */
-  private findTopmostUnit(wx: number, wy: number): EntityState | null {
+  /** 找到点击位置附近最上层的单位（渲染按 x+y 深度，最上层近似 = 列表末尾）。ownerId 过滤可选。 */
+  private findTopmostUnit(wx: number, wy: number, ownerId?: number): EntityState | null {
     const state = this.game.state;
     for (let i = state.entitiesOrder.length - 1; i >= 0; i--) {
       const e = state.entities[state.entitiesOrder[i]];
-      if (e && e.type === 'unit' && Math.hypot(e.x - wx, e.y - wy) <= CLICK_HIT_RADIUS) return e;
+      if (
+        e &&
+        e.type === 'unit' &&
+        (ownerId === undefined || e.ownerId === ownerId) &&
+        Math.hypot(e.x - wx, e.y - wy) <= CLICK_HIT_RADIUS
+      ) {
+        return e;
+      }
     }
     return null;
   }
 
-  /** 右键：给选中的己方单位分配不同落点，各自发 move 命令。目标格不可走则不响应。 */
-  private issueMove(p: Phaser.Input.Pointer): void {
+  /**
+   * 右键：点在敌方单位上 → 对全部选中单位发 attack；否则对目标格分配落点发 move。
+   * 目标格不可走则不响应。命令只入队，由下一 tick 统一应用。
+   */
+  private onRightClick(p: Phaser.Input.Pointer): void {
     const state = this.game.state;
     const units = state.selectedEntityIds
       .map((id) => state.entities[id])
@@ -123,6 +133,15 @@ export class SelectionController {
     if (units.length === 0) return;
 
     const world = this.cam.getWorldPoint(p.x, p.y);
+    const target = this.findTopmostUnit(world.x, world.y);
+    if (target && target.ownerId !== PLAYER_ID) {
+      // 攻击命令：右键敌方单位
+      for (const e of units) {
+        state.pendingCommands.push({ type: 'attack', playerId: PLAYER_ID, entityId: e.id, targetEntityId: target.id });
+      }
+      return;
+    }
+
     const g = screenToGrid(world.x, world.y);
     const gx = Math.round(g.x);
     const gy = Math.round(g.y);

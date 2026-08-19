@@ -11,7 +11,7 @@ function updateOccupancy(state: GameState, e: EntityState): void {
   if (old && old.occupiedBy === e.id) old.occupiedBy = null;
   e.tileX = tx;
   e.tileY = ty;
-  occupy(state, e, tx, ty);
+  occupy(state, e, [{ x: tx, y: ty }]);
 }
 
 /**

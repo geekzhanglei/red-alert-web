@@ -1,7 +1,20 @@
-import { MapState, DEFAULT_MAP_WIDTH, DEFAULT_MAP_HEIGHT, generateMap } from './map';
+import { MapState, DEFAULT_MAP_WIDTH, DEFAULT_MAP_HEIGHT, generateMap, tileAt } from './map';
 import { UNIT_DEFINITIONS, UnitDefinitionMap } from '../data/units';
-import { EntityState, spawnUnit } from './entities';
+import { BUILDING_DEFINITIONS, BuildingDefinitionMap } from '../data/buildings';
+import { EntityState, spawnUnit, spawnBuilding } from './entities';
 import { GameCommand } from './commands';
+import { createVisibility, VisibilityState } from './visibility';
+
+/** 瞬态渲染事件：系统在 tick 内产生，渲染层读取后清空；不参与回放/存档。 */
+export type GameEvent = { type: 'shot'; fromX: number; fromY: number; toX: number; toY: number };
+
+/** 玩家资源状态：资金由经济系统唯一写入口修改（docs/06-economy.md §A1）。 */
+export interface PlayerState {
+  id: number;
+  money: number;
+  powerProduced: number; // 阶段五·B：由各电力建筑贡献
+  powerConsumed: number; // 阶段五·B：由各建筑消耗
+}
 
 /**
  * 全项目唯一的状态容器：核心系统只读写它，渲染层只读它。
@@ -13,6 +26,9 @@ export interface GameState {
   map: MapState;
   /** 单位定义表（数据驱动），运行期只读。 */
   defs: UnitDefinitionMap;
+  /** 建筑定义表（数据驱动），运行期只读。 */
+  buildingDefs: BuildingDefinitionMap;
+  players: PlayerState[];
   nextEntityId: number;
   /** 实体表；迭代一律走 entitiesOrder，保证顺序稳定（决策四）。 */
   entities: Record<number, EntityState>;
@@ -23,6 +39,10 @@ export interface GameState {
   pendingCommands: GameCommand[];
   /** 命令日志（tick + 命令），存档/回放的地基（docs/09-save-replay.md）。 */
   commandLog: { tick: number; command: GameCommand }[];
+  /** 瞬态渲染事件（如开火弹道），渲染层读取后清空。 */
+  events: GameEvent[];
+  /** 战争迷雾：每玩家一张 Uint8Array。 */
+  visibility: VisibilityState;
 }
 
 export interface GameOptions {
@@ -39,31 +59,113 @@ export const DEFAULT_SEED = 20260818;
 /** 人类玩家 id；AI 阶段会给电脑分配不同的 playerId。 */
 export const PLAYER_ID = 0;
 
+const PLAYER_START_MONEY = 5000;
+const ENEMY_START_MONEY = 3000;
+
 export function createInitialGameState(options?: GameOptions): GameState {
   const width = options?.width ?? DEFAULT_MAP_WIDTH;
   const height = options?.height ?? DEFAULT_MAP_HEIGHT;
   const seed = options?.seed ?? DEFAULT_SEED;
+  const playerIds = [0, 1];
   const state: GameState = {
     tick: 0,
     seed,
     map: generateMap(width, height, seed),
     defs: UNIT_DEFINITIONS,
+    buildingDefs: BUILDING_DEFINITIONS,
+    players: [
+      { id: 0, money: PLAYER_START_MONEY, powerProduced: 0, powerConsumed: 0 },
+      { id: 1, money: ENEMY_START_MONEY, powerProduced: 0, powerConsumed: 0 },
+    ],
     nextEntityId: 1,
     entities: {},
     entitiesOrder: [],
     selectedEntityIds: [],
     pendingCommands: [],
     commandLog: [],
+    events: [],
+    visibility: createVisibility(width, height, playerIds),
   };
-  if (options?.testUnits !== false) spawnTestUnits(state);
+  if (options?.testUnits !== false) spawnTestSetup(state);
   return state;
 }
 
-/** 开发期测试部队：固定坐标（确定性），让地图上有可操作的单位。坐标已对照 DEFAULT_SEED 确认全部可走。 */
-function spawnTestUnits(state: GameState): void {
+/**
+ * 开发期测试初始布局：程序化寻找可建块/可走格（确定性，随 seed 稳定），避免硬编码踩水。
+ * 玩家：基地 + 矿场 + 采矿车 + 战斗单位；敌方：基地 + 战斗单位（阶段六前静止）。
+ */
+function spawnTestSetup(state: GameState): void {
+  const baseSpot = findBuildableSpot(state.map, 3, 3, 28, 18)!;
+  spawnBuilding(state, 'base', 0, baseSpot.x, baseSpot.y);
+  const refSpot = findBuildableSpot(state.map, 2, 2, 27, 22)!;
+  spawnBuilding(state, 'refinery', 0, refSpot.x, refSpot.y);
+  const harvSpot = findAdjacentFreeSpot(state.map, refSpot.x, refSpot.y, 2, 2, 26, 23)!;
+  spawnUnit(state, 'harvester', 0, harvSpot.x + 0.5, harvSpot.y + 0.5);
+
   spawnUnit(state, 'tank', 0, 30, 30);
   spawnUnit(state, 'tank', 0, 32, 30);
   spawnUnit(state, 'infantry', 0, 30, 33);
   spawnUnit(state, 'infantry', 0, 32, 33);
   spawnUnit(state, 'infantry', 0, 34, 32);
+
+  const enemyBase = findBuildableSpot(state.map, 3, 3, 36, 30)!;
+  spawnBuilding(state, 'base', 1, enemyBase.x, enemyBase.y);
+  spawnUnit(state, 'infantry', 1, 38, 32);
+  spawnUnit(state, 'tank', 1, 41, 34);
+  spawnUnit(state, 'infantry', 1, 39, 37);
+}
+
+/** 从 near 点向外螺旋找一块 w×h 全 buildable 的区域。 */
+export function findBuildableSpot(map: MapState, w: number, h: number, nearX: number, nearY: number): { x: number; y: number } | null {
+  for (let ring = 0; ring < 40; ring++) {
+    for (let dy = -ring; dy <= ring; dy++) {
+      for (let dx = -ring; dx <= ring; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== ring) continue;
+        const x = nearX + dx;
+        const y = nearY + dy;
+        if (isBuildableBlock(map, x, y, w, h)) return { x, y };
+      }
+    }
+  }
+  return null;
+}
+
+function isBuildableBlock(map: MapState, x: number, y: number, w: number, h: number): boolean {
+  for (let dy = 0; dy < h; dy++) {
+    for (let dx = 0; dx < w; dx++) {
+      const tile = tileAt(map, x + dx, y + dy);
+      if (!tile || !tile.buildable || tile.occupiedBy != null) return false;
+    }
+  }
+  return true;
+}
+
+/** 找 footprint 外沿最近于 (nearX, nearY) 的可走空闲格（用于采矿车出生点等）。 */
+function findAdjacentFreeSpot(
+  map: MapState,
+  bx: number,
+  by: number,
+  w: number,
+  h: number,
+  nearX: number,
+  nearY: number,
+): { x: number; y: number } | null {
+  let best: { x: number; y: number } | null = null;
+  let bestD = Infinity;
+  for (let dy = -1; dy <= h; dy++) {
+    for (let dx = -1; dx <= w; dx++) {
+      const inside = dx >= 0 && dy >= 0 && dx < w && dy < h;
+      if (inside) continue;
+      const x = bx + dx;
+      const y = by + dy;
+      const tile = tileAt(map, x, y);
+      if (!tile || !tile.walkable || tile.occupiedBy != null) continue;
+      const d = Math.max(Math.abs(x - nearX), Math.abs(y - nearY));
+      if (d < bestD) {
+        bestD = d;
+        best = { x, y };
+      }
+    }
+  }
+  return best;
 }

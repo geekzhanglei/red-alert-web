@@ -27,10 +27,11 @@ describe('命令系统', () => {
     expect(e.command).toEqual({ type: 'stop' });
   });
 
-  it('对已不存在的实体发命令被安全忽略', () => {
+  it('对已不存在的实体发命令被安全忽略（命令仍入日志，保证回放忠实）', () => {
     const s = createInitialGameState({ testUnits: false });
     s.pendingCommands.push({ type: 'move', playerId: 0, entityId: 999, targetX: 8, targetY: 5 });
     expect(() => processCommands(s)).not.toThrow();
-    expect(s.commandLog).toHaveLength(0);
+    // 所有命令都会记录（包括 no-op），回放时按日志原样重演
+    expect(s.commandLog).toHaveLength(1);
   });
 });

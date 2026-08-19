@@ -1,0 +1,253 @@
+import { GameState } from '../state/GameState';
+import { EntityState } from '../state/entities';
+import { canAfford } from '../state/players';
+import { GridPoint } from '../pathfinding/AStar';
+import { tileAt } from '../state/map';
+
+/**
+ * 敌方 AI（docs/07-ai.md）：战略/战术两层 FSM。
+ * 战略层每 N tick 醒一次：基于 buildOrder 造建筑、攒兵；兵力到阈值转 attack。
+ * 战术层：attack 组集结→向最近敌方建筑/基地进发，defense 组回防受袭点。
+ * AI 只发命令入队，不直接改状态（与人类玩家走同一条路径，回放天然一致）。
+ */
+
+const AI_PLAYER_ID = 1;
+const STRATEGIC_PERIOD = 30; // 战略层每 30 tick 醒一次（约 1.5 秒）
+const DEFAULT_BUILD_ORDER = ['refinery', 'power_proxy', 'barracks', 'power_proxy', 'factory', 'power_proxy'];
+// power_proxy = 基地（AI 已建）；下面 replace_power_proxy 用基地替代「多建电厂」
+
+interface AiBrain {
+  state: 'develop' | 'buildUp' | 'attack' | 'defend';
+  nextThinkTick: number;
+  attackThreshold: number;
+  buildIndex: number;
+}
+
+const brains: WeakMap<GameState, Map<number, AiBrain>> = new WeakMap();
+
+function getBrain(state: GameState, playerId: number): AiBrain {
+  let m = brains.get(state);
+  if (!m) {
+    m = new Map();
+    brains.set(state, m);
+  }
+  let b = m.get(playerId);
+  if (!b) {
+    b = {
+      state: 'develop',
+      nextThinkTick: 60, // 给玩家一点初始优势
+      attackThreshold: 4,
+      buildIndex: 0,
+    };
+    m.set(playerId, b);
+  }
+  return b;
+}
+
+/** 全部 AI 玩家（除玩家 0 以外）走战略/战术。 */
+export function updateAi(state: GameState): void {
+  for (let pid = 1; pid < state.players.length; pid++) {
+    const brain = getBrain(state, pid);
+    if (state.tick < brain.nextThinkTick) continue;
+    brain.nextThinkTick = state.tick + STRATEGIC_PERIOD;
+    strategicThink(state, brain, pid);
+  }
+  // 战术层：每 tick 推进 attack/defend 组的攻击/移动
+  tacticalAct(state);
+}
+
+function strategicThink(state: GameState, brain: AiBrain, pid: number): void {
+  // 1) 受袭检测：己方建筑在挨打 → 转 defend
+  if (anyBuildingUnderAttack(state, pid)) {
+    brain.state = 'defend';
+  }
+  // 2) 兵力评估
+  const myAttackUnits = countAttackUnits(state, pid);
+  // 3) 受袭恢复 develop（敌人被赶走或建筑血量恢复）
+  if (brain.state === 'defend' && !anyBuildingUnderAttack(state, pid)) {
+    brain.state = myAttackUnits >= brain.attackThreshold ? 'buildUp' : 'develop';
+  }
+  // 4) 建筑建造（按 buildOrder）
+  ensureBuildingConstruction(state, brain, pid);
+  // 5) 兵力攒到阈值转 buildUp，再集结一些
+  if (brain.state === 'develop' && myAttackUnits >= brain.attackThreshold) {
+    brain.state = 'buildUp';
+  }
+  if (brain.state === 'buildUp' && myAttackUnits >= brain.attackThreshold + 2) {
+    brain.state = 'attack';
+  }
+  // 6) 进攻：给 attack 单位指派目标
+  if (brain.state === 'attack') {
+    const target = findAttackTarget(state, pid);
+    if (target) {
+      for (const e of state.entitiesOrder.map((id) => state.entities[id])) {
+        if (e && e.type === 'unit' && e.ownerId === pid && state.defs[e.typeId].weapon) {
+          state.pendingCommands.push({ type: 'attack', playerId: pid, entityId: e.id, targetEntityId: target.id });
+        }
+      }
+      // 一波打出去后回到 develop
+      brain.state = 'develop';
+      brain.attackThreshold += 2; // 下一波更大
+      brain.buildIndex = 0;
+    }
+  }
+}
+
+function tacticalAct(state: GameState): void {
+  // 受袭时把 idle 攻击单位调回去打最近的敌方单位
+  for (let pid = 1; pid < state.players.length; pid++) {
+    if (!anyBuildingUnderAttack(state, pid)) continue;
+    const attacker = findNearestEnemyToOwnBuildings(state, pid);
+    if (!attacker) continue;
+    for (const e of state.entitiesOrder.map((id) => state.entities[id])) {
+      if (
+        e &&
+        e.type === 'unit' &&
+        e.ownerId === pid &&
+        state.defs[e.typeId].weapon &&
+        e.attackTargetId == null &&
+        e.activity === 'idle'
+      ) {
+        state.pendingCommands.push({ type: 'attack', playerId: pid, entityId: e.id, targetEntityId: attacker.id });
+      }
+    }
+  }
+}
+
+function ensureBuildingConstruction(state: GameState, brain: AiBrain, pid: number): void {
+  while (brain.buildIndex < DEFAULT_BUILD_ORDER.length) {
+    const item = DEFAULT_BUILD_ORDER[brain.buildIndex];
+    if (item === 'power_proxy') {
+      // 没有专门的电厂：让基地多产电是固定的，这里跳到下一个
+      brain.buildIndex++;
+      continue;
+    }
+    const def = state.buildingDefs[item];
+    if (!def) {
+      brain.buildIndex++;
+      continue;
+    }
+    if (hasBuilding(state, pid, item)) {
+      brain.buildIndex++;
+      continue;
+    }
+    if (!canAfford(state, pid, def.cost)) return; // 钱不够，下次再试
+    const spot = findBuildSpot(state, def.footprint.w, def.footprint.h, findPlayerCenter(state, pid));
+    if (!spot) {
+      // 找不到位置（围死/地形塞满），跳过这一项
+      brain.buildIndex++;
+      continue;
+    }
+    state.pendingCommands.push({ type: 'build', playerId: pid, buildingTypeId: item, x: spot.x, y: spot.y });
+    brain.buildIndex++;
+    return; // 一个 tick 放一个，避免一次花光钱
+  }
+}
+
+function countAttackUnits(state: GameState, pid: number): number {
+  let n = 0;
+  for (const id of state.entitiesOrder) {
+    const e = state.entities[id];
+    if (e && e.type === 'unit' && e.ownerId === pid && state.defs[e.typeId].weapon) n++;
+  }
+  return n;
+}
+
+function hasBuilding(state: GameState, pid: number, typeId: string): boolean {
+  for (const id of state.entitiesOrder) {
+    const e = state.entities[id];
+    if (e && e.type === 'building' && e.typeId === typeId && e.ownerId === pid) return true;
+  }
+  return false;
+}
+
+function anyBuildingUnderAttack(state: GameState, pid: number): boolean {
+  for (const id of state.entitiesOrder) {
+    const e = state.entities[id];
+    if (!e || e.type !== 'building' || e.ownerId !== pid) continue;
+    const def = state.buildingDefs[e.typeId];
+    if (e.hp < def.maxHp) return true;
+  }
+  return false;
+}
+
+function findAttackTarget(state: GameState, pid: number): EntityState | null {
+  let best: EntityState | null = null;
+  let bestD = Infinity;
+  const myCenter = findPlayerCenter(state, pid);
+  for (const id of state.entitiesOrder) {
+    const e = state.entities[id];
+    if (!e || e.ownerId === pid) continue;
+    if (e.type !== 'building' && e.type !== 'unit') continue;
+    const d = Math.max(Math.abs(e.tileX - myCenter.x), Math.abs(e.tileY - myCenter.y));
+    if (d < bestD) {
+      bestD = d;
+      best = e;
+    }
+  }
+  return best;
+}
+
+function findNearestEnemyToOwnBuildings(state: GameState, pid: number): EntityState | null {
+  let best: EntityState | null = null;
+  let bestD = Infinity;
+  for (const id of state.entitiesOrder) {
+    const e = state.entities[id];
+    if (!e || e.ownerId === pid) continue;
+    if (e.type !== 'unit') continue;
+    for (const bid of state.entitiesOrder) {
+      const b = state.entities[bid];
+      if (!b || b.type !== 'building' || b.ownerId !== pid) continue;
+      const d = Math.max(Math.abs(e.tileX - b.tileX), Math.abs(e.tileY - b.tileY));
+      if (d < bestD) {
+        bestD = d;
+        best = e;
+      }
+    }
+  }
+  return best;
+}
+
+function findPlayerCenter(state: GameState, pid: number): GridPoint {
+  let sx = 0, sy = 0, n = 0;
+  for (const id of state.entitiesOrder) {
+    const e = state.entities[id];
+    if (e && e.ownerId === pid) {
+      sx += e.tileX;
+      sy += e.tileY;
+      n++;
+    }
+  }
+  if (n === 0) return { x: 0, y: 0 };
+  return { x: Math.round(sx / n), y: Math.round(sy / n) };
+}
+
+/** 在玩家中心附近找可建 spot（4 方向外扩）。 */
+export function findBuildSpot(
+  state: GameState,
+  w: number,
+  h: number,
+  near: GridPoint,
+): GridPoint | null {
+  for (let ring = 0; ring < 40; ring++) {
+    for (let dy = -ring; dy <= ring; dy++) {
+      for (let dx = -ring; dx <= ring; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== ring) continue;
+        const x = near.x + dx;
+        const y = near.y + dy;
+        if (isBuildableBlock(state, x, y, w, h)) return { x, y };
+      }
+    }
+  }
+  return null;
+}
+
+function isBuildableBlock(state: GameState, x: number, y: number, w: number, h: number): boolean {
+  for (let dy = 0; dy < h; dy++) {
+    for (let dx = 0; dx < w; dx++) {
+      const tile = tileAt(state.map, x + dx, y + dy);
+      if (!tile || !tile.buildable || tile.occupiedBy != null) return false;
+    }
+  }
+  return true;
+}

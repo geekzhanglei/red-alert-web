@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { GameScene } from './game/render/GameScene';
+import { createInitialGameState, PLAYER_ID } from './game/state/GameState';
+import { spawnUnit, spawnBuilding } from './game/state/entities';
 import './styles.css';
 
 const config: Phaser.Types.Core.GameConfig = {
@@ -23,6 +25,13 @@ function boot(): void {
   if (import.meta.env.DEV) {
     // 开发期调试钩子：在控制台直接操作 game（如排查 ScaleManager / 摄像机状态）
     (window as unknown as { __game: Phaser.Game }).__game = game;
+    // 暴露实体创建/状态构造工具，便于浏览器 console 做场景化调试
+    (window as unknown as { __sim: unknown }).__sim = {
+      createInitialGameState,
+      spawnUnit,
+      spawnBuilding,
+      PLAYER_ID,
+    };
   }
 }
 

@@ -10,14 +10,19 @@
     <main id="app" aria-label="Red Alert Web 游戏">
       <div id="game-root"></div>
       <aside id="hud" aria-label="游戏状态">
-        <span>资金 $5000</span>
-        <span>电力 100/100</span>
+        <span>资金 <span id="money">$0</span></span>
         <span id="selection-info">选择：无</span>
         <span id="tile-info">鼠标：—</span>
       </aside>
-      <p id="controls-hint">左键选中 · 右键移动 · 中键拖拽平移 · 滚轮缩放 · 边缘滚屏</p>
+      <aside id="build-bar" aria-label="建造栏">
+        <button type="button" data-building="refinery">矿场 $2000</button>
+        <button type="button" data-building="barracks">兵营 $500</button>
+        <button type="button" data-building="factory">战车工厂 $2000</button>
+        <p id="build-hint">点击按钮开始放置 · 左键确认 · 右键 / Esc 取消</p>
+      </aside>
+      <aside id="prod-panel" aria-label="生产面板"></aside>
+      <p id="controls-hint">左键选中 · 右键移动/攻击 · 中键拖拽平移 · 滚轮缩放 · 边缘滚屏</p>
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
-
