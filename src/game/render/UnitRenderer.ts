@@ -4,6 +4,7 @@ import { EntityState } from '../state/entities';
 import { gridToScreen } from './isometric';
 import { FOG_VISIBLE, getFog } from '../state/visibility';
 import { textureKeyFor } from '../../assets/loadSprites';
+import { getUnitScreenRotation } from './unitFacing';
 
 /**
  * 单位渲染层（贴图版）：用对象池管理单位 Image，每帧 setPosition/setRotation/setTexture。
@@ -56,9 +57,8 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
           else img.setDisplaySize(32, 32);
           if (e.ownerId === 1) img.setTint(ENEMY_TINT);
           else img.clearTint();
-          // 等距下 y 轴压缩：世界朝向角 → 屏幕显示角
-          // 单位贴图本身是 32×32（横向），方向角直接 rotation
-          img.setRotation(e.facing);
+          // 世界网格方向要先投影到等距屏幕，再扣除每张素材自己的默认朝向。
+          img.setRotation(getUnitScreenRotation(e.typeId, e.facing));
         } else {
           img.setVisible(false);
         }
