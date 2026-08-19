@@ -34,7 +34,8 @@ export class MapRenderer {
         const c = gridToScreen(x, y);
         const img = scene.add.image(c.x, c.y, key);
         img.setOrigin(0.5, 0.5);
-        // 菱形自然被贴图底图的菱形切边覆盖；轻微缩放让贴图菱形顶点对齐
+        // 所有地形资源统一压到逻辑格尺寸；高分辨率原创位图因此可以直接替换 SVG。
+        img.setDisplaySize(TILE_W, TILE_H);
         this.terrainImages.push(img);
       }
     }

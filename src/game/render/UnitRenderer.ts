@@ -49,6 +49,8 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
           img.setTexture(key);
           img.setVisible(true);
           img.setPosition(s.x, s.y);
+          if (e.typeId === 'tank' && e.ownerId === 0) img.setDisplaySize(42, 30);
+          else img.setDisplaySize(32, 32);
           // 等距下 y 轴压缩：世界朝向角 → 屏幕显示角
           // 单位贴图本身是 32×32（横向），方向角直接 rotation
           img.setRotation(e.facing);

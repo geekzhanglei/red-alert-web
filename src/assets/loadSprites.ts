@@ -8,19 +8,20 @@ import { SPRITES } from './sprites';
  */
 export function loadAllSprites(scene: Phaser.Scene): void {
   // 地形（owner 不参与）
-  scene.load.image('tile_grass', SPRITES.grass);
+  // 原创位图优先；其余地形仍使用 SVG 兜底，便于逐步替换资源。
+  scene.load.image('tile_grass', '/assets/original/terrain-grass.png');
   scene.load.image('tile_water', SPRITES.water);
   scene.load.image('tile_rock', SPRITES.rock);
   scene.load.image('tile_ore', SPRITES.ore);
   // 单位（按阵营分 key）
   for (const o of [0, 1]) {
     scene.load.image(`unit_infantry_${o}`, SPRITES.infantry(o));
-    scene.load.image(`unit_tank_${o}`, SPRITES.tank(o));
+    scene.load.image(`unit_tank_${o}`, o === 0 ? '/assets/original/unit-tank.png' : SPRITES.tank(o));
     scene.load.image(`unit_harvester_${o}`, SPRITES.harvester(o));
   }
   // 建筑
   for (const o of [0, 1]) {
-    scene.load.image(`bld_base_${o}`, SPRITES.base(o));
+    scene.load.image(`bld_base_${o}`, o === 0 ? '/assets/original/building-command-center.png' : SPRITES.base(o));
     scene.load.image(`bld_refinery_${o}`, SPRITES.refinery(o));
     scene.load.image(`bld_barracks_${o}`, SPRITES.barracks(o));
     scene.load.image(`bld_factory_${o}`, SPRITES.factory(o));

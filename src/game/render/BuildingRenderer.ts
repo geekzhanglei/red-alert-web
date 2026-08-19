@@ -42,8 +42,8 @@ export class BuildingRenderer extends Phaser.GameObjects.Graphics {
           img.setTexture(key);
           img.setVisible(true);
           // 贴图原始 96×96，对应 3 格宽 footprint（每格 32 像素宽），按 footprint 缩放
-          const scale = Math.max(def.footprint.w, def.footprint.h) / 3;
-          img.setScale(scale);
+          if (e.typeId === 'base' && e.ownerId === 0) img.setDisplaySize(192, 128);
+          else img.setScale(Math.max(def.footprint.w, def.footprint.h) / 3);
           img.setPosition(s.x, s.y);
         } else {
           img.setVisible(false);
