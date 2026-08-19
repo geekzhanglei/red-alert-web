@@ -15,16 +15,17 @@ export function loadAllSprites(scene: Phaser.Scene): void {
   scene.load.image('tile_ore', SPRITES.ore);
   // 单位（按阵营分 key）
   for (const o of [0, 1]) {
-    scene.load.image(`unit_infantry_${o}`, SPRITES.infantry(o));
-    scene.load.image(`unit_tank_${o}`, o === 0 ? '/assets/original/unit-tank.png' : SPRITES.tank(o));
-    scene.load.image(`unit_harvester_${o}`, o === 0 ? '/assets/original/unit-harvester.png' : SPRITES.harvester(o));
+    // 双方共用同一套原创工业材质；渲染层按 owner 加阵营色，避免敌方回退到旧 SVG。
+    scene.load.image(`unit_infantry_${o}`, '/assets/original/unit-infantry.png');
+    scene.load.image(`unit_tank_${o}`, '/assets/original/unit-tank.png');
+    scene.load.image(`unit_harvester_${o}`, '/assets/original/unit-harvester.png');
   }
   // 建筑
   for (const o of [0, 1]) {
-    scene.load.image(`bld_base_${o}`, o === 0 ? '/assets/original/building-command-center.png' : SPRITES.base(o));
-    scene.load.image(`bld_refinery_${o}`, o === 0 ? '/assets/original/building-refinery.png' : SPRITES.refinery(o));
-    scene.load.image(`bld_barracks_${o}`, o === 0 ? '/assets/original/building-barracks.png' : SPRITES.barracks(o));
-    scene.load.image(`bld_factory_${o}`, o === 0 ? '/assets/original/building-factory.png' : SPRITES.factory(o));
+    scene.load.image(`bld_base_${o}`, '/assets/original/building-command-center.png');
+    scene.load.image(`bld_refinery_${o}`, '/assets/original/building-refinery.png');
+    scene.load.image(`bld_barracks_${o}`, '/assets/original/building-barracks.png');
+    scene.load.image(`bld_factory_${o}`, '/assets/original/building-factory.png');
   }
 }
 

@@ -43,9 +43,11 @@ export class BuildingRenderer extends Phaser.GameObjects.Graphics {
           img.setTexture(key);
           img.setVisible(true);
           // 原创位图按 footprint 给出稳定的屏幕尺寸；旧 SVG 仍按原始 96×96 规则缩放。
-          const originalSize = e.ownerId === 0 ? ORIGINAL_BUILDING_SIZE[e.typeId] : undefined;
+          const originalSize = ORIGINAL_BUILDING_SIZE[e.typeId];
           if (originalSize) img.setDisplaySize(originalSize.w, originalSize.h);
           else img.setScale(Math.max(def.footprint.w, def.footprint.h) / 3);
+          if (e.ownerId === 1) img.setTint(ENEMY_TINT);
+          else img.clearTint();
           img.setPosition(s.x, s.y);
         } else {
           img.setVisible(false);
@@ -78,6 +80,8 @@ const ORIGINAL_BUILDING_SIZE: Record<string, { w: number; h: number }> = {
   barracks: { w: 144, h: 108 },
   refinery: { w: 144, h: 120 },
 };
+
+const ENEMY_TINT = 0xc94a55;
 
 function isBuildingVisibleTo(state: GameState, e: EntityState, viewerPlayerId: number): boolean {
   if (e.ownerId === viewerPlayerId) return true;
