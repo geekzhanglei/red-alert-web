@@ -14,6 +14,7 @@ export class BuildingRenderer extends Phaser.GameObjects.Graphics {
 
   constructor(scene: Phaser.Scene) {
     super(scene);
+    this.setDepth(21);
     scene.add.existing(this);
   }
 
@@ -29,7 +30,7 @@ export class BuildingRenderer extends Phaser.GameObjects.Graphics {
     drawable.sort((a, b) => a.y - b.y);
 
     while (this.pool.length < drawable.length) {
-      this.pool.push(this.scene.add.image(0, 0, '__DEFAULT'));
+      this.pool.push(this.scene.add.image(0, 0, '__DEFAULT').setDepth(20));
     }
     for (let i = 0; i < this.pool.length; i++) {
       const img = this.pool[i];

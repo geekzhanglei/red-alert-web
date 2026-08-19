@@ -32,7 +32,7 @@ export class MapRenderer {
         const tile = map.tiles[idx];
         const key = TERRAIN_TEXTURE_KEY[tile.terrain];
         const c = gridToScreen(x, y);
-        const img = scene.add.image(c.x, c.y, key);
+        const img = scene.add.image(c.x, c.y, key).setDepth(0);
         img.setOrigin(0.5, 0.5);
         // 所有地形资源统一压到逻辑格尺寸；高分辨率原创位图因此可以直接替换 SVG。
         img.setDisplaySize(TILE_W, TILE_H);

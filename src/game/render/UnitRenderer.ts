@@ -16,6 +16,7 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
 
   constructor(scene: Phaser.Scene) {
     super(scene);
+    this.setDepth(31);
     scene.add.existing(this);
   }
 
@@ -37,7 +38,7 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
 
     // 复用/创建 Image
     while (this.pool.length < drawable.length) {
-      this.pool.push(this.scene.add.image(0, 0, '__DEFAULT'));
+      this.pool.push(this.scene.add.image(0, 0, '__DEFAULT').setDepth(30));
     }
     for (let i = 0; i < this.pool.length; i++) {
       const img = this.pool[i];
