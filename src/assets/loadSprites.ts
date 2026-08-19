@@ -22,9 +22,9 @@ export function loadAllSprites(scene: Phaser.Scene): void {
   // 建筑
   for (const o of [0, 1]) {
     scene.load.image(`bld_base_${o}`, o === 0 ? '/assets/original/building-command-center.png' : SPRITES.base(o));
-    scene.load.image(`bld_refinery_${o}`, SPRITES.refinery(o));
-    scene.load.image(`bld_barracks_${o}`, SPRITES.barracks(o));
-    scene.load.image(`bld_factory_${o}`, SPRITES.factory(o));
+    scene.load.image(`bld_refinery_${o}`, o === 0 ? '/assets/original/building-refinery.png' : SPRITES.refinery(o));
+    scene.load.image(`bld_barracks_${o}`, o === 0 ? '/assets/original/building-barracks.png' : SPRITES.barracks(o));
+    scene.load.image(`bld_factory_${o}`, o === 0 ? '/assets/original/building-factory.png' : SPRITES.factory(o));
   }
 }
 

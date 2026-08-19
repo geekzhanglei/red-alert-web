@@ -42,8 +42,9 @@ export class BuildingRenderer extends Phaser.GameObjects.Graphics {
         if (this.scene.textures.exists(key)) {
           img.setTexture(key);
           img.setVisible(true);
-          // 贴图原始 96×96，对应 3 格宽 footprint（每格 32 像素宽），按 footprint 缩放
-          if (e.typeId === 'base' && e.ownerId === 0) img.setDisplaySize(192, 128);
+          // 原创位图按 footprint 给出稳定的屏幕尺寸；旧 SVG 仍按原始 96×96 规则缩放。
+          const originalSize = e.ownerId === 0 ? ORIGINAL_BUILDING_SIZE[e.typeId] : undefined;
+          if (originalSize) img.setDisplaySize(originalSize.w, originalSize.h);
           else img.setScale(Math.max(def.footprint.w, def.footprint.h) / 3);
           img.setPosition(s.x, s.y);
         } else {
@@ -70,6 +71,13 @@ export class BuildingRenderer extends Phaser.GameObjects.Graphics {
     this.fillRect(s.x - w / 2, s.y - 16, w * ratio, 3);
   }
 }
+
+const ORIGINAL_BUILDING_SIZE: Record<string, { w: number; h: number }> = {
+  base: { w: 192, h: 128 },
+  factory: { w: 192, h: 144 },
+  barracks: { w: 144, h: 108 },
+  refinery: { w: 144, h: 120 },
+};
 
 function isBuildingVisibleTo(state: GameState, e: EntityState, viewerPlayerId: number): boolean {
   if (e.ownerId === viewerPlayerId) return true;
