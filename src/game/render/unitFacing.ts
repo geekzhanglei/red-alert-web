@@ -1,22 +1,17 @@
 import { TILE_H, TILE_W } from './isometric';
 
 /**
- * 生成的单位图不是以同一个画面方向为正前方：步兵枪口朝右下，坦克炮管朝左，矿车钻头朝左下。
- * 这里记录每张图在未旋转状态下的「正前方」，渲染时再把网格方向投影到等距屏幕。
+ * 四方向帧的固定顺序。等距 RTS 使用离散方向帧，避免把带透视的整张单位图旋转到侧躺。
+ * 0=东南（右下），1=西南（左下），2=西北（左上），3=东北（右上）。
  */
-const SPRITE_FORWARD_ANGLE: Record<string, number> = {
-  infantry: 0.45,
-  tank: Math.PI,
-  harvester: 2.75,
-};
+export type UnitFacingFrame = 0 | 1 | 2 | 3;
 
-/** 将逻辑层网格角度转换成当前单位贴图应使用的屏幕旋转角。 */
-export function getUnitScreenRotation(typeId: string, worldAngle: number): number {
+/** 将逻辑层网格角度投影到屏幕，再选取所在象限的方向帧。 */
+export function getUnitFacingFrame(worldAngle: number): UnitFacingFrame {
   const worldDx = Math.cos(worldAngle);
   const worldDy = Math.sin(worldAngle);
   const screenDx = (worldDx - worldDy) * (TILE_W / 2);
   const screenDy = (worldDx + worldDy) * (TILE_H / 2);
-  const screenAngle = Math.atan2(screenDy, screenDx);
-  return screenAngle - (SPRITE_FORWARD_ANGLE[typeId] ?? 0);
+  if (screenDx >= 0) return screenDy >= 0 ? 0 : 3;
+  return screenDy >= 0 ? 1 : 2;
 }
-

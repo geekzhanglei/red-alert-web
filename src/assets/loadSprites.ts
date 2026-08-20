@@ -15,10 +15,10 @@ export function loadAllSprites(scene: Phaser.Scene): void {
   scene.load.image('tile_ore', SPRITES.ore);
   // 单位（按阵营分 key）
   for (const o of [0, 1]) {
-    // 双方共用同一套原创工业材质；渲染层按 owner 加阵营色，避免敌方回退到旧 SVG。
-    scene.load.image(`unit_infantry_${o}`, '/assets/original/unit-infantry.png');
-    scene.load.image(`unit_tank_${o}`, '/assets/original/unit-tank.png');
-    scene.load.image(`unit_harvester_${o}`, '/assets/original/unit-harvester.png');
+    // 四方向帧按 SE、SW、NW、NE 排列；双方共用材质，渲染层按 owner 加阵营色。
+    scene.load.spritesheet(`unit_infantry_${o}`, '/assets/original/unit-infantry-facings.png', UNIT_FACING_SHEET);
+    scene.load.spritesheet(`unit_tank_${o}`, '/assets/original/unit-tank-facings.png', UNIT_FACING_SHEET);
+    scene.load.spritesheet(`unit_harvester_${o}`, '/assets/original/unit-harvester-facings.png', UNIT_FACING_SHEET);
   }
   // 建筑
   for (const o of [0, 1]) {
@@ -28,6 +28,8 @@ export function loadAllSprites(scene: Phaser.Scene): void {
     scene.load.image(`bld_factory_${o}`, '/assets/original/building-factory.png');
   }
 }
+
+const UNIT_FACING_SHEET = { frameWidth: 256, frameHeight: 256 };
 
 export function textureKeyFor(typeId: string, owner: number, kind: 'unit' | 'building'): string {
   const prefix = kind === 'unit' ? 'unit' : 'bld';

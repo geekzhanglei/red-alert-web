@@ -1,20 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { getUnitScreenRotation } from './unitFacing';
+import { getUnitFacingFrame } from './unitFacing';
 
-describe('getUnitScreenRotation', () => {
-  it('projects a grid direction into the isometric screen direction', () => {
-    // 网格 +x 在屏幕上是右下方，步兵素材的默认枪口方向也接近右下方。
-    expect(getUnitScreenRotation('infantry', 0)).toBeCloseTo(0.014, 2);
+describe('getUnitFacingFrame', () => {
+  it('maps the four grid axes to the four isometric facing frames', () => {
+    expect(getUnitFacingFrame(0)).toBe(0); // 网格 +x → 屏幕右下
+    expect(getUnitFacingFrame(Math.PI / 2)).toBe(1); // 网格 +y → 屏幕左下
+    expect(getUnitFacingFrame(Math.PI)).toBe(2); // 网格 -x → 屏幕左上
+    expect(getUnitFacingFrame(-Math.PI / 2)).toBe(3); // 网格 -y → 屏幕右上
   });
 
-  it('keeps opposite movement directions opposite on screen', () => {
-    const forward = getUnitScreenRotation('tank', 0);
-    const backward = getUnitScreenRotation('tank', Math.PI);
-    expect(Math.abs(Math.abs(backward - forward) - Math.PI)).toBeLessThan(0.01);
-  });
-
-  it('uses different source orientations for tank and harvester art', () => {
-    expect(getUnitScreenRotation('tank', 0)).not.toBeCloseTo(getUnitScreenRotation('harvester', 0), 1);
+  it('keeps opposite directions on opposite frames', () => {
+    for (const angle of [0, 0.4, 1.2, 2.4]) {
+      const frame = getUnitFacingFrame(angle);
+      const opposite = getUnitFacingFrame(angle + Math.PI);
+      expect((opposite - frame + 4) % 4).toBe(2);
+    }
   });
 });
-

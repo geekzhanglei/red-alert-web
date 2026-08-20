@@ -4,7 +4,7 @@ import { EntityState } from '../state/entities';
 import { gridToScreen } from './isometric';
 import { FOG_VISIBLE, getFog } from '../state/visibility';
 import { textureKeyFor } from '../../assets/loadSprites';
-import { getUnitScreenRotation } from './unitFacing';
+import { getUnitFacingFrame } from './unitFacing';
 
 /**
  * 单位渲染层（贴图版）：用对象池管理单位 Image，每帧 setPosition/setRotation/setTexture。
@@ -49,16 +49,16 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
         const key = textureKeyFor(e.typeId, e.ownerId, 'unit');
         if (this.scene.textures.exists(key)) {
           img.setTexture(key);
+          img.setFrame(getUnitFacingFrame(e.facing));
           img.setVisible(true);
           img.setPosition(s.x, s.y);
-          if (e.typeId === 'tank') img.setDisplaySize(42, 30);
-          else if (e.typeId === 'harvester') img.setDisplaySize(52, 36);
-          else if (e.typeId === 'infantry') img.setDisplaySize(28, 30);
-          else img.setDisplaySize(32, 32);
+          const visual = UNIT_VISUALS[e.typeId] ?? DEFAULT_UNIT_VISUAL;
+          img.setDisplaySize(visual.width, visual.height);
+          img.setOrigin(0.5, visual.originY);
           if (e.ownerId === 1) img.setTint(ENEMY_TINT);
           else img.clearTint();
-          // 世界网格方向要先投影到等距屏幕，再扣除每张素材自己的默认朝向。
-          img.setRotation(getUnitScreenRotation(e.typeId, e.facing));
+          // 方向由帧表达；整张等距透视图保持直立，不再旋转画布。
+          img.setRotation(0);
         } else {
           img.setVisible(false);
         }
@@ -143,6 +143,13 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
 }
 
 const ENEMY_TINT = 0xc94a55;
+
+const DEFAULT_UNIT_VISUAL = { width: 32, height: 32, originY: 0.7 };
+const UNIT_VISUALS: Record<string, { width: number; height: number; originY: number }> = {
+  infantry: { width: 38, height: 38, originY: 0.78 },
+  tank: { width: 50, height: 40, originY: 0.7 },
+  harvester: { width: 60, height: 44, originY: 0.68 },
+};
 
 function isVisibleTo(state: GameState, e: EntityState, viewerPlayerId: number): boolean {
   if (e.ownerId === viewerPlayerId) return true;
