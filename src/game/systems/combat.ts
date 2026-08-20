@@ -70,11 +70,17 @@ function chase(state: GameState, e: EntityState, target: EntityState, range: num
   e.facing = Math.atan2(dy, dx);
 }
 
-/** 命中即结算：伤害按装甲修正，hp ≤ 0 走统一死亡清理；同时产生瞬态弹道事件供渲染。 */
+/** 命中即结算：伤害按装甲修正 × 攻击方升级倍率；hp ≤ 0 走统一死亡清理；同时产生瞬态弹道事件供渲染。 */
 function fire(state: GameState, e: EntityState, target: EntityState): void {
   const weapon = state.defs[e.typeId].weapon!;
-  const mult = weapon.modifiers[armorOf(state, target)] ?? 1;
-  target.hp -= weapon.damage * mult;
+  const mod = weapon.modifiers[armorOf(state, target)] ?? 1;
+  // 目标血量上限也吃升级倍率（用合成的有效 maxHp 推算）
+  const tgtDef = target.type === 'building' ? state.buildingDefs[target.typeId] : state.defs[target.typeId];
+  const effTargetMaxHp = tgtDef.maxHp * target.hpMultiplier;
+  const damage = weapon.damage * mod * e.damageMultiplier;
+  // 等比例缩放：hp / effMaxHp = hp - damage / defMaxHp
+  const newHp = target.hp - damage * (tgtDef.maxHp / effTargetMaxHp);
+  target.hp = Math.round(newHp);
   state.events.push({ type: 'shot', fromX: e.x, fromY: e.y, toX: target.x, toY: target.y });
   if (target.hp <= 0) removeEntity(state, target.id);
 }

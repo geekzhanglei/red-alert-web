@@ -94,6 +94,11 @@ function serializeEntity(e: GameState['entities'][number] | undefined) {
     harvestPhase: e.harvestPhase,
     productionQueue: [...e.productionQueue],
     productionProgress: e.productionProgress,
+    upgraded: e.upgraded,
+    producesExtra: [...e.producesExtra],
+    powerBonus: e.powerBonus,
+    damageMultiplier: e.damageMultiplier,
+    hpMultiplier: e.hpMultiplier,
   };
 }
 

@@ -52,7 +52,7 @@ export function recomputePower(state: GameState): void {
     const def = state.buildingDefs[e.typeId];
     const p = state.players[e.ownerId];
     if (!p || !def) continue;
-    p.powerProduced += def.powerProvided;
+    p.powerProduced += def.powerProvided + e.powerBonus;
     p.powerConsumed += def.powerConsumed;
   }
 }
@@ -91,12 +91,12 @@ function findSpawnSpot(state: GameState, e: EntityState, w: number, h: number): 
   return best;
 }
 
-/** 玩家手点「训练步兵」：入队即扣钱。建筑必须能产该单位。 */
+/** 玩家手点「训练步兵」：入队即扣钱。建筑必须能产该单位（含升级解锁的）。 */
 export function enqueueTrain(state: GameState, buildingId: number, playerId: number, unitTypeId: string): boolean {
   const b = state.entities[buildingId];
   if (!b || b.type !== 'building' || b.ownerId !== playerId) return false;
   const def = state.buildingDefs[b.typeId];
-  if (!def.produces.includes(unitTypeId)) return false;
+  if (!def.produces.includes(unitTypeId) && !b.producesExtra.includes(unitTypeId)) return false;
   const unitDef = state.defs[unitTypeId];
   if (!unitDef) return false;
   const player = state.players[playerId];

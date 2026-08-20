@@ -145,6 +145,43 @@ body {
   cursor: not-allowed;
 }
 
+/* 选中面板扩展：属性行 + 升级按钮（仅己方可升级） */
+#prod-panel .stat-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #cfd6cf;
+  margin: 1px 0;
+}
+
+#prod-panel .stat-row .lbl {
+  color: #a0b0a6;
+}
+
+#prod-panel .group-card {
+  border: 1px solid #445850;
+  border-radius: 4px;
+  padding: 4px 6px;
+  margin: 4px 0;
+}
+
+#prod-panel .group-card.enemy {
+  border-color: #6e2828;
+}
+
+#prod-panel .upgrade-btn {
+  background: #4a3f1f;
+  border-color: #8a742e;
+  color: #ffd24a;
+  margin-top: 4px;
+}
+
+#prod-panel .upgrade-btn:disabled {
+  background: #1c2820;
+  border-color: #506253;
+  color: #a0b0a6;
+}
+
 #controls-hint {
   position: fixed;
   left: 16px;

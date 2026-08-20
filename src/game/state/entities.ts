@@ -45,6 +45,16 @@ export interface EntityState {
   productionQueue: string[];
   /** 生产建筑：当前单位的累计 tick。 */
   productionProgress: number;
+  /** 是否已升级（最多 1 次，状态字段防重，UI 隐藏不够）。 */
+  upgraded: boolean;
+  /** 升级后：额外可生产的单位（合并到 def.produces）。 */
+  producesExtra: string[];
+  /** 升级后：电力产出加成（叠加到 def.powerProvided）。 */
+  powerBonus: number;
+  /** 升级后：伤害倍率（仅单位；建筑无此概念）。 */
+  damageMultiplier: number;
+  /** 升级后：血量倍率（用于渲染血条比例 = e.hp / (def.maxHp * hpMultiplier)）。 */
+  hpMultiplier: number;
 }
 
 export function spawnUnit(state: GameState, typeId: string, ownerId: number, x: number, y: number): EntityState {
@@ -75,6 +85,11 @@ export function spawnUnit(state: GameState, typeId: string, ownerId: number, x: 
     harvestPhase: 'idle',
     productionQueue: [],
     productionProgress: 0,
+    upgraded: false,
+    producesExtra: [],
+    powerBonus: 0,
+    damageMultiplier: 1,
+    hpMultiplier: 1,
   };
   state.entities[id] = e;
   state.entitiesOrder.push(id);
@@ -117,6 +132,11 @@ export function spawnBuilding(state: GameState, typeId: string, ownerId: number,
     harvestPhase: 'idle',
     productionQueue: [],
     productionProgress: 0,
+    upgraded: false,
+    producesExtra: [],
+    powerBonus: 0,
+    damageMultiplier: 1,
+    hpMultiplier: 1,
   };
   state.entities[id] = e;
   state.entitiesOrder.push(id);

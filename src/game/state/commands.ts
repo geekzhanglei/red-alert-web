@@ -6,17 +6,24 @@ import { tileAt } from './map';
 import { canAfford, changeMoney } from './players';
 import type { BuildingDefinition } from '../data/buildings';
 import { enqueueTrain } from '../systems/production';
+import { applyUpgrade } from '../systems/upgrade';
+
+/** 升级费用：原造价 ×50%，最低 100（base 造价 0 时也需实付）。 */
+export function upgradeCost(state: GameState, e: EntityState): number {
+  if (e.type === 'building') return Math.max(100, Math.floor(state.buildingDefs[e.typeId].cost * 0.5));
+  return Math.max(100, Math.floor(state.defs[e.typeId].cost * 0.5));
+}
 
 /**
  * 玩家的操作统一编码成命令（docs/01-architecture.md 决策四）。
  * 带 playerId：谁发起的命令，回放/联网按「玩家 → tick → 命令」对齐（docs/09-save-replay.md）。
- * 后续阶段追加 'train'（阶段五·B）。
  */
 export type GameCommand =
   | { type: 'move'; playerId: number; entityId: number; targetX: number; targetY: number }
   | { type: 'attack'; playerId: number; entityId: number; targetEntityId: number }
   | { type: 'build'; playerId: number; buildingTypeId: string; x: number; y: number }
   | { type: 'train'; playerId: number; buildingId: number; unitTypeId: string }
+  | { type: 'upgrade'; playerId: number; entityId: number }
   | { type: 'stop'; playerId: number; entityId: number };
 
 /**
@@ -100,6 +107,19 @@ export function processCommands(state: GameState): void {
       case 'train':
         enqueueTrain(state, cmd.buildingId, cmd.playerId, cmd.unitTypeId);
         break;
+      case 'upgrade': {
+        // 升级原子：canAfford → changeMoney → 标记 → 应用效果
+        const e = state.entities[cmd.entityId];
+        if (!e) break;
+        if (e.ownerId !== cmd.playerId) break; // 跨阵营
+        if (e.upgraded) break; // 已升过
+        const cost = upgradeCost(state, e);
+        if (!canAfford(state, cmd.playerId, cost)) break;
+        changeMoney(state, cmd.playerId, -cost);
+        e.upgraded = true;
+        applyUpgrade(state, e);
+        break;
+      }
       case 'stop': {
         const e = state.entities[cmd.entityId];
         if (!e || e.type !== 'unit') break;
