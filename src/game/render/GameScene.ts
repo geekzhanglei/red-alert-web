@@ -9,7 +9,9 @@ import { UnitRenderer } from './UnitRenderer';
 import { BuildingRenderer } from './BuildingRenderer';
 import { CameraController } from '../input/CameraController';
 import { SelectionController } from '../input/SelectionController';
+import { SquadController } from '../input/SquadController';
 import { BuildingPlacementController } from '../input/BuildingPlacementController';
+import { upgradeCost } from '../state/commands';
 import { canAfford } from '../state/players';
 import { Minimap } from './Minimap';
 import { ResultOverlay } from '../../ui/ResultOverlay';
@@ -70,8 +72,12 @@ export class GameScene extends Phaser.Scene {
     cam.centerOn(bounds.centerX, bounds.centerY);
     cam.setBackgroundColor('#101511');
 
-    this.cameraControl = new CameraController(this, cam, { leftButtonPan: false });
+    this.cameraControl = new CameraController(this, cam, {
+      leftButtonPan: false,
+      homeView: { x: this.sim.state.map.width / 2, y: this.sim.state.map.height / 2, zoom: 1 },
+    });
     new SelectionController(this, this.sim, cam);
+    new SquadController(this, this.sim);
     this.placement = new BuildingPlacementController(this, this.sim, cam);
     this.placement.onCancel = () => this.refreshBuildButtons();
 
@@ -190,7 +196,7 @@ export class GameScene extends Phaser.Scene {
           }
           html += `<div class="stat-row"><span class="lbl">状态</span><span>${this.activityLabel(sample.activity)}</span></div>`;
           if (isFriendly && !sample.upgraded) {
-            const cost = Math.floor(def.cost * 0.5);
+            const cost = upgradeCost(state, sample);
             html += `<button class="upgrade-btn" data-upgrade="${sample.id}" data-cost="${cost}" data-upgrade-kind="unit" ${player.money < cost ? 'disabled' : ''}>升级 $${cost}</button>`;
           } else if (sample.upgraded) {
             html += `<div class="stat-row"><span style="color:#ffd24a">★ 已升级</span></div>`;
@@ -223,7 +229,7 @@ export class GameScene extends Phaser.Scene {
             }
             html += `</div>`;
             if (!sample.upgraded) {
-              const cost = Math.floor(def.cost * 0.5);
+              const cost = upgradeCost(state, sample);
               html += `<button class="upgrade-btn" data-upgrade="${sample.id}" data-cost="${cost}" data-upgrade-kind="building" ${player.money < cost ? 'disabled' : ''}>升级 $${cost}</button>`;
             } else {
               html += `<div class="stat-row"><span style="color:#ffd24a">★ 已升级</span></div>`;
@@ -309,7 +315,8 @@ export class GameScene extends Phaser.Scene {
       const e = items[0];
       const def = e.type === 'building' ? state.buildingDefs[e.typeId] : state.defs[e.typeId];
       const tag = e.type === 'building' ? '建筑' : '';
-      this.selectionInfoEl.textContent = `选择：${def.name}${tag} · 生命 ${Math.ceil(e.hp)}/${def.maxHp}`;
+      const maxHp = def.maxHp * e.hpMultiplier;
+      this.selectionInfoEl.textContent = `选择：${def.name}${tag} · 生命 ${Math.ceil(e.hp)}/${Math.round(maxHp)}`;
     } else {
       this.selectionInfoEl.textContent = `选择：${items.length} 个实体`;
     }

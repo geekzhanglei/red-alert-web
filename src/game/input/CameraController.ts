@@ -7,7 +7,11 @@ export interface CameraControllerOptions {
   edgeScrollMargin?: number; // 距视口边缘多少像素触发边缘滚屏
   edgeScrollSpeed?: number;  // 边缘滚屏速度（世界像素/秒）
   leftButtonPan?: boolean;   // 阶段三框选接入后改为 false，左键拖拽让给框选
+  /** H 键回主视图的锚点（世界坐标）。留空则 H 键不绑定。 */
+  homeView?: { x: number; y: number; zoom?: number };
 }
+
+type ResolvedCameraControllerOptions = Required<Omit<CameraControllerOptions, 'homeView'>> & Pick<CameraControllerOptions, 'homeView'>;
 
 /**
  * 摄像机控制：拖拽平移、滚轮锚点缩放、边缘滚屏。
@@ -17,7 +21,7 @@ export interface CameraControllerOptions {
 export class CameraController {
   private cam: Phaser.Cameras.Scene2D.Camera;
   private input: Phaser.Input.InputPlugin;
-  private opts: Required<CameraControllerOptions>;
+  private opts: ResolvedCameraControllerOptions;
   private dragging = false;
   private pointerActive = false; // 鼠标是否真的在画布上（防止启动时幽灵指针触发边缘滚屏）
   private lastX = 0;
@@ -33,6 +37,7 @@ export class CameraController {
       edgeScrollMargin: 24,
       edgeScrollSpeed: 600,
       leftButtonPan: true,
+      homeView: undefined,
       ...opts,
     };
 
@@ -76,6 +81,22 @@ export class CameraController {
       this.cam.scrollX = anchor.x - p.x / next;
       this.cam.scrollY = anchor.y - p.y / next;
     });
+
+    // H 键 / F1 键：回到玩家基地（homeView）默认缩放 1.0。
+    const kb = scene.input.keyboard;
+    if (kb && this.opts.homeView) {
+      const goHome = () => this.goHome();
+      kb.on('keydown-H', goHome);
+      kb.on('keydown-F1', goHome);
+    }
+  }
+
+  /** 回到 homeView（默认 zoom=1）。 */
+  goHome(): void {
+    const h = this.opts.homeView;
+    if (!h) return;
+    this.cam.zoom = h.zoom ?? 1;
+    this.cam.centerOn(h.x, h.y);
   }
 
   /** 每帧调用，dt 单位是秒。负责边缘滚屏。 */

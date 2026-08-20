@@ -94,7 +94,10 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
 
   private drawSelectionRing(px: number, py: number): void {
     const s = gridToScreen(px, py);
-    this.lineStyle(2, 0xf2d93b, 0.95);
+    // 与建筑共用冷色选中语言：不与敌对/警告的暖色混淆。
+    this.lineStyle(5, 0x168dff, 0.16);
+    this.strokeEllipse(s.x, s.y, 22, 12);
+    this.lineStyle(1.5, 0x7bd8ff, 0.95);
     this.strokeEllipse(s.x, s.y, 20, 10);
   }
 

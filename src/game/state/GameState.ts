@@ -46,6 +46,8 @@ export interface GameState {
   entitiesOrder: number[];
   /** 当前选中的实体 id（输入层维护，不参与逻辑演算）。 */
   selectedEntityIds: number[];
+  /** 1~9 号玩家编队（每个 id 是一组实体 id；空槽未定义）。Ctrl+数字保存，数字复读。 */
+  squads: Record<number, number[]>;
   /** 待应用命令队列：输入层入队，每个 tick 由命令系统统一消费。 */
   pendingCommands: GameCommand[];
   /** 命令日志（tick + 命令），存档/回放的地基（docs/09-save-replay.md）。 */
@@ -98,6 +100,7 @@ export function createInitialGameState(options?: GameOptions): GameState {
     entities: {},
     entitiesOrder: [],
     selectedEntityIds: [],
+    squads: {},
     pendingCommands: [],
     commandLog: [],
     events: [],

@@ -3,11 +3,45 @@ import { Game } from '../core/Game';
 import { EntityState } from '../state/entities';
 import { PLAYER_ID } from '../state/GameState';
 import { tileAt } from '../state/map';
-import { screenToGrid } from '../render/isometric';
+import { gridToScreen, screenToGrid } from '../render/isometric';
 import { assignDestinations } from '../pathfinding/destinations';
+import { isEntityAnchorInRect, isPointInTileDiamond } from './selectionGeometry';
 
 const DRAG_THRESHOLD = 5; // 像素：小于视为点击，大于视为框选
-const CLICK_HIT_RADIUS = 0.6; // 格：点击选单位的命中半径
+const UNIT_CLICK_RADIUS = 22; // 地图世界像素：单位地面锚点的点击半径
+
+/**
+ * 调试 HUD：一个跟随鼠标的 8px 红点 + 文字 label（down/up/dom-up）。
+ * 临时排查「点不到单位」用，确认无问题后用 ?clear=1 隐藏。
+ */
+let debugCursor: HTMLDivElement | null = null;
+let debugLabel: HTMLDivElement | null = null;
+function ensureDebugHud(): void {
+  if (debugCursor && debugLabel) return;
+  debugCursor = document.createElement('div');
+  debugCursor.style.cssText =
+    'position:fixed;width:8px;height:8px;border-radius:50%;background:#ff3b3b;pointer-events:none;z-index:9999;transform:translate(-50%,-50%);display:none';
+  debugLabel = document.createElement('div');
+  debugLabel.style.cssText =
+    'position:fixed;font:12px/1 system-ui;color:#ff3b3b;background:rgba(0,0,0,.6);padding:2px 6px;border-radius:3px;pointer-events:none;z-index:9999;display:none';
+  document.body.appendChild(debugCursor);
+  document.body.appendChild(debugLabel);
+}
+function setDebugCursor(x: number, y: number, phase: string): void {
+  ensureDebugHud();
+  if (!debugCursor || !debugLabel) return;
+  debugCursor.style.left = `${x}px`;
+  debugCursor.style.top = `${y}px`;
+  debugCursor.style.display = 'block';
+  debugLabel.textContent = phase;
+  debugLabel.style.left = `${x + 12}px`;
+  debugLabel.style.top = `${y + 6}px`;
+  debugLabel.style.display = 'block';
+  setTimeout(() => {
+    if (debugLabel) debugLabel.style.display = 'none';
+    if (debugCursor) debugCursor.style.display = 'none';
+  }, 600);
+}
 
 /**
  * 选择与命令输入（docs/04-selection-pathfinding.md）：
@@ -40,6 +74,8 @@ export class SelectionController {
         this.pressX = p.x;
         this.pressY = p.y;
         this.pressed = true;
+        // 调试 HUD：显示按下点
+        setDebugCursor(p.x, p.y, 'down');
       }
       if (p.rightButtonDown()) this.onRightClick(p);
     });
@@ -54,6 +90,7 @@ export class SelectionController {
     scene.input.on('pointerup', (p: Phaser.Input.Pointer) => {
       if (!this.pressed) return;
       this.pressed = false;
+      setDebugCursor(p.x, p.y, 'up');
       if (this.boxActive) {
         this.boxActive = false;
         this.box.setVisible(false);
@@ -62,16 +99,65 @@ export class SelectionController {
         this.selectAt(p);
       }
     });
+
+    // DOM 双绑定：Phaser 事件在某些环境（合成事件、专注状态切换）下不触发，
+    // 直接用 DOM 事件兜底。先 stopPropagation 避免重复处理。
+    const canvas = scene.game.canvas as HTMLCanvasElement;
+    const domDown = (e: PointerEvent) => {
+      if (e.button === 2) {
+        setDebugCursor(e.clientX, e.clientY, 'dom-right');
+        this.onRightClickScreen(e.clientX, e.clientY);
+        e.preventDefault();
+        return;
+      }
+      if (e.button === 0) {
+        setDebugCursor(e.clientX, e.clientY, 'dom-down');
+        this.pressX = e.clientX;
+        this.pressY = e.clientY;
+        this.pressed = true;
+        this.boxActive = false;
+        e.preventDefault();
+      }
+    };
+    const domMove = (e: PointerEvent) => {
+      if (!this.pressed || e.button !== 0) return;
+      if (Math.hypot(e.clientX - this.pressX, e.clientY - this.pressY) > DRAG_THRESHOLD) {
+        this.boxActive = true;
+        this.updateBox(this.pressX, this.pressY, e.clientX, e.clientY);
+        this.selectBox(this.pressX, this.pressY, e.clientX, e.clientY);
+      }
+    };
+    const domUp = (e: PointerEvent) => {
+      if (!this.pressed || e.button !== 0) return;
+      this.pressed = false;
+      setDebugCursor(e.clientX, e.clientY, 'dom-up');
+      if (this.boxActive) {
+        this.boxActive = false;
+        this.box.setVisible(false);
+        this.selectBox(this.pressX, this.pressY, e.clientX, e.clientY);
+      } else if (Math.hypot(e.clientX - this.pressX, e.clientY - this.pressY) < DRAG_THRESHOLD) {
+        this.selectAtScreen(e.clientX, e.clientY);
+      }
+    };
+    canvas.addEventListener('pointerdown', domDown);
+    canvas.addEventListener('pointermove', domMove);
+    canvas.addEventListener('pointerup', domUp);
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
-  /** 点击：选中最上层己方单位；点空白清空选择。 */
+  /** 点击：选中最上层己方实体（单位或建筑）；点空白清空选择。 */
   private selectAt(p: Phaser.Input.Pointer): void {
-    const world = this.cam.getWorldPoint(p.x, p.y);
-    const hit = this.findTopmostUnit(world.x, world.y, PLAYER_ID);
+    this.selectAtScreen(p.x, p.y);
+  }
+
+  /** 用屏幕坐标（DOM 事件原始 clientX/Y）选中。 */
+  private selectAtScreen(screenX: number, screenY: number): void {
+    const world = this.cam.getWorldPoint(screenX, screenY);
+    const hit = this.findTopmostEntity(world.x, world.y, PLAYER_ID);
     this.game.state.selectedEntityIds = hit ? [hit.id] : [];
   }
 
-  /** 框选：屏幕矩形四角反投影 → 世界 AABB → 选中落在其中的己方单位。 */
+  /** 框选：屏幕矩形反投影为地图世界矩形，选中锚点落入其中的己方实体。 */
   private selectBox(sx0: number, sy0: number, sx1: number, sy1: number): void {
     const corners = [
       this.cam.getWorldPoint(sx0, sy0),
@@ -87,7 +173,9 @@ export class SelectionController {
     const ids: number[] = [];
     for (const id of this.game.state.entitiesOrder) {
       const e = this.game.state.entities[id];
-      if (e && e.type === 'unit' && e.ownerId === PLAYER_ID && e.x >= minX && e.x <= maxX && e.y >= minY && e.y <= maxY) {
+      // 不能把逻辑格坐标 e.x/e.y 与渲染世界像素 minX/minY 混比。
+      // 先将实体锚点投影到同一坐标系，建筑和单位共用这一规则。
+      if (e && e.ownerId === PLAYER_ID && isEntityAnchorInRect(e, minX, minY, maxX, maxY)) {
         ids.push(id);
       }
     }
@@ -104,8 +192,8 @@ export class SelectionController {
     this.box.setVisible(true);
   }
 
-  /** 找到点击位置附近最上层的单位（渲染按 x+y 深度，最上层近似 = 列表末尾）。ownerId 过滤可选。 */
-  private findTopmostUnit(wx: number, wy: number, ownerId?: number): EntityState | null {
+  /** 找到点击位置最上层实体。单位优先于建筑，避免点在站在建筑上的单位时误选建筑。 */
+  private findTopmostEntity(wx: number, wy: number, ownerId?: number): EntityState | null {
     const state = this.game.state;
     for (let i = state.entitiesOrder.length - 1; i >= 0; i--) {
       const e = state.entities[state.entitiesOrder[i]];
@@ -113,7 +201,18 @@ export class SelectionController {
         e &&
         e.type === 'unit' &&
         (ownerId === undefined || e.ownerId === ownerId) &&
-        Math.hypot(e.x - wx, e.y - wy) <= CLICK_HIT_RADIUS
+        this.pointHitsUnit(wx, wy, e)
+      ) {
+        return e;
+      }
+    }
+    for (let i = state.entitiesOrder.length - 1; i >= 0; i--) {
+      const e = state.entities[state.entitiesOrder[i]];
+      if (
+        e &&
+        e.type === 'building' &&
+        (ownerId === undefined || e.ownerId === ownerId) &&
+        e.occupiedTiles.some((t) => isPointInTileDiamond(wx, wy, t.x, t.y))
       ) {
         return e;
       }
@@ -121,19 +220,28 @@ export class SelectionController {
     return null;
   }
 
+  private pointHitsUnit(wx: number, wy: number, e: EntityState): boolean {
+    const anchor = gridToScreen(e.x, e.y);
+    return Math.hypot(anchor.x - wx, anchor.y - wy) <= UNIT_CLICK_RADIUS;
+  }
+
   /**
-   * 右键：点在敌方单位上 → 对全部选中单位发 attack；否则对目标格分配落点发 move。
+   * 右键：点在敌方实体（单位或建筑）上 → 对全部选中单位发 attack；否则对目标格分配落点发 move。
    * 目标格不可走则不响应。命令只入队，由下一 tick 统一应用。
    */
   private onRightClick(p: Phaser.Input.Pointer): void {
+    this.onRightClickScreen(p.x, p.y);
+  }
+
+  private onRightClickScreen(screenX: number, screenY: number): void {
     const state = this.game.state;
     const units = state.selectedEntityIds
       .map((id) => state.entities[id])
       .filter((e): e is EntityState => Boolean(e) && e.type === 'unit' && e.ownerId === PLAYER_ID);
     if (units.length === 0) return;
 
-    const world = this.cam.getWorldPoint(p.x, p.y);
-    const target = this.findTopmostUnit(world.x, world.y);
+    const world = this.cam.getWorldPoint(screenX, screenY);
+    const target = this.findTopmostEntity(world.x, world.y);
     if (target && target.ownerId !== PLAYER_ID) {
       // 攻击命令：右键敌方单位
       for (const e of units) {
