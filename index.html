@@ -5,8 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="An original browser-based real-time strategy game prototype" />
     <title>Red Alert Web</title>
+    <style>
+      /* 首屏关键样式内联，避免模块脚本和 CSS 尚未到达时闪出默认白色控件。 */
+      html, body { width: 100%; height: 100%; margin: 0; background: #101511; }
+      body { overflow: hidden; }
+      #app { width: 100%; height: 100%; visibility: hidden; background: #101511; }
+      #app.app-ready { visibility: visible; }
+      #boot-screen {
+        position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center;
+        color: #a8e0a8; background: radial-gradient(circle at 50% 40%, #18241d 0%, #08090a 100%);
+        font: 600 14px/1 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        letter-spacing: .12em;
+      }
+    </style>
   </head>
   <body>
+    <div id="boot-screen" role="status" aria-live="polite">正在加载战区…</div>
     <main id="app" aria-label="Red Alert Web 游戏">
       <div id="game-root"></div>
       <aside id="hud" aria-label="游戏状态">

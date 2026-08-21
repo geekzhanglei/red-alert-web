@@ -15,19 +15,15 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
   private shots: { x1: number; y1: number; x2: number; y2: number; bornAt: number }[] = [];
   private pool: Phaser.GameObjects.Image[] = [];
   private glowPool: (Phaser.FX.Glow | null)[] = [];
-  /** 地面选中标记放在单位贴图下方，避免光圈压住车体/人物。 */
-  private selectionGround: Phaser.GameObjects.Graphics;
 
   constructor(scene: Phaser.Scene) {
     super(scene);
     this.setDepth(31);
     scene.add.existing(this);
-    this.selectionGround = scene.add.graphics().setDepth(29);
   }
 
   update(state: GameState, alpha: number, viewerPlayerId = 0): void {
     this.clear();
-    this.selectionGround.clear();
     this.consumeShotEvents(state);
     this.drawTargetMarkers(state);
     this.drawMovePaths(state);
@@ -81,10 +77,9 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
       }
     }
 
-    // 地面光圈 + 血条。实际贴图轮廓由 PreFX Glow 高亮。
+    // 贴图轮廓由 PreFX Glow 高亮，选中单位不再画底部圆圈。
     for (const { e, px, py } of drawable) {
       const selected = state.selectedEntityIds.includes(e.id);
-      if (selected) this.drawSelectionMarker(e.typeId, px, py);
       this.drawHpBar(e, state, px, py, selected);
     }
   }
@@ -105,18 +100,6 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
       this.lineStyle(1.5, 0xffd24a, fade);
       this.lineBetween(from.x, from.y, to.x, to.y);
     }
-  }
-
-  private drawSelectionMarker(typeId: string, px: number, py: number): void {
-    const s = gridToScreen(px, py);
-    const marker = UNIT_SELECTION_MARKERS[typeId] ?? DEFAULT_SELECTION_MARKER;
-    const pulse = 0.17 + Math.sin(this.scene.time.now / 220) * 0.035;
-    this.selectionGround.fillStyle(0x168dff, pulse);
-    this.selectionGround.fillEllipse(s.x, s.y, marker.width, marker.height);
-    this.selectionGround.lineStyle(6, 0x168dff, 0.13);
-    this.selectionGround.strokeEllipse(s.x, s.y, marker.width + 4, marker.height + 3);
-    this.selectionGround.lineStyle(1.5, 0x82ddff, 0.95);
-    this.selectionGround.strokeEllipse(s.x, s.y, marker.width, marker.height);
   }
 
   private drawHpBar(e: EntityState, state: GameState, px: number, py: number, selected: boolean): void {
@@ -171,13 +154,6 @@ const UNIT_VISUALS: Record<string, { width: number; height: number; originY: num
   infantry: { width: 38, height: 38, originY: 0.78 },
   tank: { width: 50, height: 40, originY: 0.7 },
   harvester: { width: 60, height: 44, originY: 0.68 },
-};
-
-const DEFAULT_SELECTION_MARKER = { width: 28, height: 13 };
-const UNIT_SELECTION_MARKERS: Record<string, { width: number; height: number }> = {
-  infantry: { width: 28, height: 13 },
-  tank: { width: 44, height: 20 },
-  harvester: { width: 52, height: 23 },
 };
 
 function isVisibleTo(state: GameState, e: EntityState, viewerPlayerId: number): boolean {

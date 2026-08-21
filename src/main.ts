@@ -43,7 +43,9 @@ function boot(): void {
 const root = document.getElementById('game-root');
 function bootWhenReady(): void {
   if (root && root.clientWidth > 0 && root.clientHeight > 0) {
+    document.getElementById('boot-screen')?.remove();
     mountStartMenu((d) => {
+      document.getElementById('app')?.classList.add('app-ready');
       currentDifficulty = d;
       if (import.meta.env.DEV) (window as unknown as { __diff: Difficulty }).__diff = d;
       boot();
