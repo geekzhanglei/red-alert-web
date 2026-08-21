@@ -29,7 +29,7 @@ export function loadAllSprites(scene: Phaser.Scene): void {
   }
 }
 
-const UNIT_FACING_SHEET = { frameWidth: 256, frameHeight: 256 };
+const UNIT_FACING_SHEET = { frameWidth: 128, frameHeight: 128 };
 
 export function textureKeyFor(typeId: string, owner: number, kind: 'unit' | 'building'): string {
   const prefix = kind === 'unit' ? 'unit' : 'bld';
