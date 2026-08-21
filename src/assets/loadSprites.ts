@@ -27,7 +27,8 @@ export function loadAllSprites(scene: Phaser.Scene): void {
   }
 }
 
-const UNIT_FACING_SHEET = { frameWidth: 128, frameHeight: 128 };
+// 方向图为 512×512 的 2×2 排列，每格依次是 SE、SW、NW、NE。
+const UNIT_FACING_SHEET = { frameWidth: 256, frameHeight: 256 };
 
 export function textureKeyFor(typeId: string, owner: number, kind: 'unit' | 'building'): string {
   const prefix = kind === 'unit' ? 'unit' : 'bld';
