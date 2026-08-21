@@ -42,6 +42,7 @@ export class GameScene extends Phaser.Scene {
   private selectionInfoEl: HTMLElement | null = null;
   private moneyEl: HTMLElement | null = null;
   private prodPanelEl: HTMLElement | null = null;
+  private speedOverlayEl: HTMLElement | null = null;
   private buildButtons: HTMLButtonElement[] = [];
   private resultOverlay = new ResultOverlay();
   private prodPanelStructureKey = '';
@@ -64,7 +65,14 @@ export class GameScene extends Phaser.Scene {
     this.load.start();
     this.buildings = new BuildingRenderer(this);
     this.units = new UnitRenderer(this);
-    this.minimap = new Minimap(this, this.sim.state);
+    this.minimap = new Minimap(this, this.sim.state, {
+      onJump: (gx, gy) => {
+        // 地图坐标 → 等距屏幕坐标 → 居中
+        const sx = (gx - gy) * 32; // TILE_W/2 = 32
+        const sy = (gx + gy) * 16; // TILE_H/2 = 16
+        this.cameras.main.centerOn(sx, sy);
+      },
+    });
 
     const cam = this.cameras.main;
     const bounds = mapWorldBounds(this.sim.state.map);
@@ -88,6 +96,57 @@ export class GameScene extends Phaser.Scene {
     this.prodPanelEl?.addEventListener('click', (event) => this.handleProductionClick(event));
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.updateTileInfo(p));
     this.wireBuildBar();
+    this.wireKeyboard();
+  }
+
+  /** 暂停/速度指示器：屏幕中央半透明大字。游戏进行中显示，胜负已结时隐藏。 */
+  private ensureSpeedOverlay(): void {
+    if (this.speedOverlayEl) return;
+    this.speedOverlayEl = document.createElement('div');
+    this.speedOverlayEl.id = 'speed-overlay';
+    this.speedOverlayEl.style.cssText =
+      'position:fixed;left:50%;top:35%;transform:translate(-50%,-50%);font:600 64px/1 system-ui;color:#ffd24a;' +
+      'text-shadow:0 2px 12px rgba(0,0,0,.8);background:rgba(10,16,12,.55);border:1px solid #506253;' +
+      'border-radius:8px;padding:18px 32px;pointer-events:none;opacity:0;transition:opacity .15s;z-index:150';
+    document.body.appendChild(this.speedOverlayEl);
+  }
+
+  private updateSpeedOverlay(): void {
+    this.ensureSpeedOverlay();
+    if (!this.speedOverlayEl) return;
+    if (this.sim.state.gameOver) {
+      this.speedOverlayEl.style.opacity = '0';
+      return;
+    }
+    if (this.loop.paused) {
+      this.speedOverlayEl.textContent = 'PAUSED';
+      this.speedOverlayEl.style.color = '#ffd24a';
+      this.speedOverlayEl.style.opacity = '1';
+    } else if (this.loop.timeScale > 1) {
+      this.speedOverlayEl.textContent = `${this.loop.timeScale}×`;
+      this.speedOverlayEl.style.color = '#a8e0a8';
+      this.speedOverlayEl.style.opacity = '1';
+    } else {
+      this.speedOverlayEl.style.opacity = '0';
+    }
+  }
+
+  /** 空格暂停、1/2/3 切 1×/2×/4×。所有按键只在游戏进行中响应（胜负已结时交给结果界面）。 */
+  private wireKeyboard(): void {
+    const kb = this.input.keyboard;
+    if (!kb) return;
+    const tryRate = (scale: number) => () => {
+      if (this.sim.state.gameOver) return;
+      this.loop.setTimeScale(scale);
+    };
+    const tryTogglePause = () => {
+      if (this.sim.state.gameOver) return;
+      this.loop.togglePause();
+    };
+    kb.on('keydown-SPACE', tryTogglePause);
+    kb.on('keydown-ONE', tryRate(1));
+    kb.on('keydown-TWO', tryRate(2));
+    kb.on('keydown-THREE', tryRate(4));
   }
 
   update(_time: number, delta: number): void {
@@ -103,6 +162,7 @@ export class GameScene extends Phaser.Scene {
     this.updateMoney();
     this.updateSelectionPanel();
     this.refreshBuildButtons();
+    this.updateSpeedOverlay();
     this.resultOverlay.update(this.sim.state);
   }
 

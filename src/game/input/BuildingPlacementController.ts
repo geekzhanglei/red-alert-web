@@ -40,11 +40,19 @@ export class BuildingPlacementController {
       this.curX = p.x;
       this.curY = p.y;
     });
-    scene.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+    // 与 SelectionController 一致：DOM 双绑定（绕开 Phaser Button 状态）。左键=放置，右键=取消。
+    const canvas = scene.game.canvas as HTMLCanvasElement;
+    canvas.addEventListener('pointerdown', (e: PointerEvent) => {
       if (!this.active) return;
-      if (p.leftButtonDown()) this.tryBuild(p);
-      if (p.rightButtonDown()) this.cancel();
+      if (e.button === 0) {
+        this.tryBuildScreen(e.clientX, e.clientY);
+        e.preventDefault();
+      } else if (e.button === 2) {
+        this.cancel();
+        e.preventDefault();
+      }
     });
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
     // Esc 取消
     scene.input.keyboard?.on('keydown-ESC', () => this.cancel());
   }
@@ -101,9 +109,14 @@ export class BuildingPlacementController {
   }
 
   private tryBuild(p: Phaser.Input.Pointer): void {
+    this.tryBuildScreen(p.x, p.y);
+  }
+
+  /** DOM 事件原始 clientX/Y 路径（与 SelectionController 对齐）。 */
+  private tryBuildScreen(screenX: number, screenY: number): void {
     if (!this.selected) return;
     const def = this.selected;
-    const world = this.cam.getWorldPoint(p.x, p.y);
+    const world = this.cam.getWorldPoint(screenX, screenY);
     const g = screenToGrid(world.x, world.y);
     const gx = Math.round(g.x);
     const gy = Math.round(g.y);
