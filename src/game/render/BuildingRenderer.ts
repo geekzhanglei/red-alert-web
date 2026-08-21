@@ -11,6 +11,8 @@ import { FOG_VISIBLE, getFog } from '../state/visibility';
  */
 export class BuildingRenderer extends Phaser.GameObjects.Graphics {
   private pool: Phaser.GameObjects.Image[] = [];
+  /** 直接作用在建筑贴图 alpha 上的光效，避免把逻辑 footprint 误画成四块方格。 */
+  private glowPool: (Phaser.FX.Glow | null)[] = [];
   /** 置于贴图下方的选中底光，负责让高亮从建筑边缘透出。 */
   private selectionGlow: Phaser.GameObjects.Graphics;
 
@@ -34,13 +36,19 @@ export class BuildingRenderer extends Phaser.GameObjects.Graphics {
     drawable.sort((a, b) => a.y - b.y);
 
     while (this.pool.length < drawable.length) {
-      this.pool.push(this.scene.add.image(0, 0, '__DEFAULT').setDepth(20));
+      const img = this.scene.add.image(0, 0, '__DEFAULT').setDepth(20);
+      const glow = img.preFX?.addGlow(0x55caff, 3.5, 0.38, false) ?? null;
+      glow?.setActive(false);
+      this.pool.push(img);
+      this.glowPool.push(glow);
     }
     for (let i = 0; i < this.pool.length; i++) {
       const img = this.pool[i];
+      const glow = this.glowPool[i];
       if (i < drawable.length) {
         const e = drawable[i];
         const def = state.buildingDefs[e.typeId];
+        const selected = state.selectedEntityIds.includes(e.id);
         const s = gridToScreen(e.x, e.y);
         const key = textureKeyFor(e.typeId, e.ownerId, 'building');
         if (this.scene.textures.exists(key)) {
@@ -53,61 +61,42 @@ export class BuildingRenderer extends Phaser.GameObjects.Graphics {
           if (e.ownerId === 1) img.setTint(ENEMY_TINT);
           else img.clearTint();
           img.setPosition(s.x, s.y);
+          glow?.setActive(selected);
         } else {
           img.setVisible(false);
+          glow?.setActive(false);
         }
       } else {
         img.setVisible(false);
+        glow?.setActive(false);
       }
     }
 
     // 选中边框与血条。建筑满血时仅在选中状态展示血条，避免地图信息过载。
     for (const e of drawable) {
       const selected = state.selectedEntityIds.includes(e.id);
-      if (selected) this.drawBuildingSelection(e);
+      if (selected) this.drawBuildingSelection(e, state.buildingDefs[e.typeId]);
       this.drawBuildingHp(state, e, selected);
     }
   }
 
-  private drawBuildingSelection(e: EntityState): void {
-    // 不画逐格网线：选中反馈应是建筑整体的能量底光，而不是占地调试图。
-    // 建筑的 occupiedTiles 始终由 spawnBuilding 按 footprint 填充。
-    const width = Math.max(...e.occupiedTiles.map((t) => t.x)) - Math.min(...e.occupiedTiles.map((t) => t.x)) + 1;
-    const height = Math.max(...e.occupiedTiles.map((t) => t.y)) - Math.min(...e.occupiedTiles.map((t) => t.y)) + 1;
-    const left = Math.min(...e.occupiedTiles.map((t) => t.x));
-    const top = Math.min(...e.occupiedTiles.map((t) => t.y));
-    const topPoint = gridToScreen(left, top);
-    const rightPoint = gridToScreen(left + width - 1, top);
-    const bottomPoint = gridToScreen(left + width - 1, top + height - 1);
-    const leftPoint = gridToScreen(left, top + height - 1);
-    const points = [
-      { x: topPoint.x, y: topPoint.y - 16 },
-      { x: rightPoint.x + 32, y: rightPoint.y },
-      { x: bottomPoint.x, y: bottomPoint.y + 16 },
-      { x: leftPoint.x - 32, y: leftPoint.y },
-    ];
-
-    // 贴图下的柔和蓝光，外侧留出少量发光边缘。
-    this.selectionGlow.fillStyle(0x168dff, 0.23);
-    this.selectionGlow.fillTriangle(points[0].x, points[0].y, points[1].x, points[1].y, points[2].x, points[2].y);
-    this.selectionGlow.fillTriangle(points[0].x, points[0].y, points[2].x, points[2].y, points[3].x, points[3].y);
-    this.selectionGlow.lineStyle(7, 0x168dff, 0.14);
-    this.drawOutline(this.selectionGlow, points);
-
-    // 贴图表面只叠一层很淡的冷色，高亮本体而不盖住建筑细节。
-    this.fillStyle(0x6ed4ff, 0.08);
-    this.fillTriangle(points[0].x, points[0].y, points[1].x, points[1].y, points[2].x, points[2].y);
-    this.fillTriangle(points[0].x, points[0].y, points[2].x, points[2].y, points[3].x, points[3].y);
-    this.lineStyle(1.5, 0x7bd8ff, 0.95);
-    this.drawOutline(this, points);
-  }
-
-  private drawOutline(graphics: Phaser.GameObjects.Graphics, points: { x: number; y: number }[]): void {
-    for (let i = 0; i < points.length; i++) {
-      const a = points[i];
-      const b = points[(i + 1) % points.length];
-      graphics.lineBetween(a.x, a.y, b.x, b.y);
-    }
+  private drawBuildingSelection(e: EntityState, def: GameState['buildingDefs'][string]): void {
+    // 选中反馈跟随实际贴图底座，而不是按逻辑格子画菱形；这样不会再出现四块矩形。
+    const s = gridToScreen(e.x, e.y);
+    const size = ORIGINAL_BUILDING_SIZE[e.typeId] ?? {
+      w: Math.max(def.footprint.w, 1) * 64,
+      h: Math.max(def.footprint.h, 1) * 48,
+    };
+    const pulse = 0.16 + Math.sin(this.scene.time.now / 220) * 0.035;
+    const width = size.w * 0.86;
+    const height = Math.max(16, size.h * 0.2);
+    const y = s.y + size.h * 0.34;
+    this.selectionGlow.fillStyle(0x168dff, pulse);
+    this.selectionGlow.fillEllipse(s.x, y, width, height);
+    this.selectionGlow.lineStyle(7, 0x168dff, 0.16);
+    this.selectionGlow.strokeEllipse(s.x, y, width + 8, height + 5);
+    this.selectionGlow.lineStyle(1.5, 0x82ddff, 0.9);
+    this.selectionGlow.strokeEllipse(s.x, y, width, height);
   }
 
   private drawBuildingHp(state: GameState, e: EntityState, selected: boolean): void {
