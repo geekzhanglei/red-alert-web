@@ -1,0 +1,104 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    name: Build Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.16.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build static game
+        run: pnpm build
+
+  deploy:
+    name: Deploy to game.feroad.com
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.16.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build static game
+        run: pnpm build
+
+      - name: Pack artifact
+        run: tar -czf red-alert-web-dist.tar.gz -C dist .
+
+      - name: Configure SSH
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+        run: |
+          test -n "$SERVER_HOST"
+          test -n "$SERVER_SSH_KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SERVER_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$SERVER_HOST" > ~/.ssh/known_hosts
+
+      - name: Upload artifact
+        run: scp -i ~/.ssh/deploy_key red-alert-web-dist.tar.gz "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/tmp/red-alert-web-dist-${{ github.sha }}.tar.gz"
+
+      - name: Deploy on server
+        run: |
+          ssh -i ~/.ssh/deploy_key "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" '
+            set -e
+            APP_DIR=/www/frontEnd/red-alert-web
+            RELEASE_DIR="$APP_DIR/releases/${{ github.sha }}"
+            CURRENT_LINK="$APP_DIR/current"
+
+            mkdir -p "$RELEASE_DIR"
+            tar -xzf /tmp/red-alert-web-dist-${{ github.sha }}.tar.gz -C "$RELEASE_DIR"
+            ln -sfn "$RELEASE_DIR" "$CURRENT_LINK"
+            rm -f /tmp/red-alert-web-dist-${{ github.sha }}.tar.gz
+            find "$APP_DIR/releases" -mindepth 1 -maxdepth 1 -type d | sort | head -n -5 | xargs -r rm -rf
+          '
+
+      - name: Verify public site
+        run: curl --fail --show-error --silent --retry 6 --retry-delay 5 https://game.feroad.com/ > /dev/null
