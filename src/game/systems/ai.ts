@@ -16,15 +16,23 @@ const STRATEGIC_PERIOD = 30; // 战略层每 30 tick 醒一次（约 1.5 秒）
 const DEFAULT_BUILD_ORDER = ['refinery', 'power_proxy', 'barracks', 'power_proxy', 'factory', 'power_proxy'];
 // power_proxy = 基地（AI 已建）；下面 replace_power_proxy 用基地替代「多建电厂」
 
+/** 难度对 AI 节奏的微调：简单让 AI 慢、迟钝；困难让 AI 更快、阈值更低。 */
+const DIFFICULTY_AI: Record<string, { nextThinkTick: number; attackThreshold: number; threatThreshold: number }> = {
+  easy: { nextThinkTick: 120, attackThreshold: 8, threatThreshold: 6 },
+  normal: { nextThinkTick: 60, attackThreshold: 4, threatThreshold: 3 },
+  hard: { nextThinkTick: 30, attackThreshold: 2, threatThreshold: 2 },
+};
+
 function getBrain(state: GameState, playerId: number): AiBrainState {
   let b = state.aiBrains[playerId];
   if (!b) {
+    const profile = DIFFICULTY_AI[state.difficulty] ?? DIFFICULTY_AI.normal;
     b = {
       state: 'develop',
-      nextThinkTick: 60, // 给玩家一点初始优势
-      attackThreshold: 4,
+      nextThinkTick: profile.nextThinkTick,
+      attackThreshold: profile.attackThreshold,
       buildIndex: 0,
-      threatThreshold: 3, // 视野内看到 ≥3 个玩家单位就迎击
+      threatThreshold: profile.threatThreshold,
       lastRepairTick: 0,
     };
     state.aiBrains[playerId] = b;

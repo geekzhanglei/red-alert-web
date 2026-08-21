@@ -56,6 +56,8 @@ export interface GameState {
   events: GameEvent[];
   /** 战争迷雾：每玩家一张 Uint8Array。 */
   visibility: VisibilityState;
+  /** 难度（影响双方起始资金 + AI 节奏）。 */
+  difficulty: Difficulty;
   /** 胜负状态：false=进行中；true=已结束，winner 是胜者 playerId 或 'draw'。 */
   /** 双方基地都曾建立后才进入可判定状态，避免单元测试/沙盒局被误判结束。 */
   victoryArmed: boolean;
@@ -69,7 +71,21 @@ export interface GameOptions {
   seed?: number;
   /** 是否生成开发期测试部队，默认 true。 */
   testUnits?: boolean;
+  /** 难度：影响双方起始资金 + AI 出兵节奏。 */
+  difficulty?: Difficulty;
 }
+
+export type Difficulty = 'easy' | 'normal' | 'hard';
+
+/**
+ * 难度调参：平衡点来自普通（默认）；简单给玩家更多资金和缓冲，困难把 AI 缩到更短出招。
+ * 注意：AIStrategicPeriod 等内部常量当前仍按默认实现，本表作为预留；将来给 AI 传 difficulty 即可微调。
+ */
+const DIFFICULTY_PROFILE: Record<Difficulty, { playerMoney: number; enemyMoney: number }> = {
+  easy: { playerMoney: 8000, enemyMoney: 2000 },
+  normal: { playerMoney: 5000, enemyMoney: 3000 },
+  hard: { playerMoney: 4000, enemyMoney: 5000 },
+};
 
 /** 固定默认种子便于开发期复现；建新局时可以传任意 seed（会随存档记录）。 */
 export const DEFAULT_SEED = 20260818;
@@ -77,14 +93,14 @@ export const DEFAULT_SEED = 20260818;
 /** 人类玩家 id；AI 阶段会给电脑分配不同的 playerId。 */
 export const PLAYER_ID = 0;
 
-const PLAYER_START_MONEY = 5000;
-const ENEMY_START_MONEY = 3000;
+export const ENEMY_ID = 1;
 
 export function createInitialGameState(options?: GameOptions): GameState {
   const width = options?.width ?? DEFAULT_MAP_WIDTH;
   const height = options?.height ?? DEFAULT_MAP_HEIGHT;
   const seed = options?.seed ?? DEFAULT_SEED;
   const playerIds = [0, 1];
+  const profile = DIFFICULTY_PROFILE[options?.difficulty ?? 'normal'];
   const state: GameState = {
     tick: 0,
     seed,
@@ -92,9 +108,10 @@ export function createInitialGameState(options?: GameOptions): GameState {
     defs: UNIT_DEFINITIONS,
     buildingDefs: BUILDING_DEFINITIONS,
     players: [
-      { id: 0, money: PLAYER_START_MONEY, powerProduced: 0, powerConsumed: 0 },
-      { id: 1, money: ENEMY_START_MONEY, powerProduced: 0, powerConsumed: 0 },
+      { id: 0, money: profile.playerMoney, powerProduced: 0, powerConsumed: 0 },
+      { id: 1, money: profile.enemyMoney, powerProduced: 0, powerConsumed: 0 },
     ],
+    difficulty: options?.difficulty ?? 'normal',
     aiBrains: {},
     nextEntityId: 1,
     entities: {},

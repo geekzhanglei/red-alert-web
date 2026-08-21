@@ -67,6 +67,7 @@ function toPlain(state: GameState) {
     victoryArmed: state.victoryArmed,
     gameOver: state.gameOver,
     winner: state.winner,
+    difficulty: state.difficulty,
   };
 }
 
@@ -148,6 +149,7 @@ function fromPlain(p: ReturnType<typeof toPlain>): GameState {
     victoryArmed: p.victoryArmed ?? false,
     gameOver: p.gameOver,
     winner: p.winner,
+    difficulty: p.difficulty,
   };
 }
 

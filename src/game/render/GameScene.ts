@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { Game } from '../core/Game';
 import { GameLoop, TICK_MS } from '../core/GameLoop';
-import { createInitialGameState, PLAYER_ID } from '../state/GameState';
+import { createInitialGameState, PLAYER_ID, Difficulty } from '../state/GameState';
 import { Terrain, tileAt } from '../state/map';
 import { screenToGrid } from './isometric';
 import { MapRenderer, mapWorldBounds } from './MapRenderer';
@@ -52,7 +52,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.sim = new Game(createInitialGameState());
+    const diff = (window as unknown as { __diff?: Difficulty }).__diff ?? 'normal';
+    this.sim = new Game(createInitialGameState({ difficulty: diff }));
 
     // 预加载原创贴图（docs/01-architecture.md 决策三）
     loadAllSprites(this);
