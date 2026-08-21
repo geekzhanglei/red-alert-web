@@ -19,6 +19,8 @@ These raster assets were generated specifically for this project as original ind
 - `unit-tank-facings.png` — four-direction tank sheet (SE, SW, NW, NE)
 - `unit-infantry-facings-v2.png` — refreshed four-direction infantry sheet (SE, SW, NW, NE)
 - `unit-tank-facings-v2.png` — refreshed four-direction tank sheet (SE, SW, NW, NE)
+- `unit-infantry-facings-v3.png` — classic RTS infantry sheet with readable helmet, rifle and boots (SE, SW, NW, NE)
+- `unit-tank-facings-v3.png` — classic RTS tank sheet with readable tracks, turret and cannon (SE, SW, NW, NE)
 - `unit-harvester-facings.png` — four-direction harvester sheet (SE, SW, NW, NE)
 
 They do not contain Red Alert 2 or Command & Conquer game files, logos, names, or extracted artwork. More units, buildings, terrain variants, animation frames, and faction variants can be added to this directory and wired through `src/assets/loadSprites.ts`.

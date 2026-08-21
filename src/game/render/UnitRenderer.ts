@@ -151,8 +151,8 @@ const ENEMY_TINT = 0xc94a55;
 
 const DEFAULT_UNIT_VISUAL = { width: 32, height: 32, originY: 0.7 };
 const UNIT_VISUALS: Record<string, { width: number; height: number; originY: number }> = {
-  infantry: { width: 38, height: 38, originY: 0.78 },
-  tank: { width: 50, height: 40, originY: 0.7 },
+  infantry: { width: 46, height: 48, originY: 0.84 },
+  tank: { width: 58, height: 48, originY: 0.72 },
   harvester: { width: 60, height: 44, originY: 0.68 },
 };
 
