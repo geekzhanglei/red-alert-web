@@ -19,11 +19,12 @@ export class BuildingPlacementController {
   private curX = 0;
   private curY = 0;
   private active = false;
+  private canvas: HTMLCanvasElement;
   /** 选种按钮在 HUD 上，本控制器通过 onSelect 回调接收。 */
   onCancel: () => void = () => {};
 
   constructor(
-    scene: Phaser.Scene,
+    private scene: Phaser.Scene,
     private game: Game,
     private cam: Phaser.Cameras.Scene2D.Camera,
   ) {
@@ -41,18 +42,25 @@ export class BuildingPlacementController {
       this.curY = p.y;
     });
     // 与 SelectionController 一致：DOM 双绑定（绕开 Phaser Button 状态）。左键=放置，右键=取消。
-    const canvas = scene.game.canvas as HTMLCanvasElement;
-    canvas.addEventListener('pointerdown', (e: PointerEvent) => {
+    this.canvas = scene.game.canvas as HTMLCanvasElement;
+    this.canvas.addEventListener('pointermove', (e: PointerEvent) => {
       if (!this.active) return;
+      const p = this.clientToGame(e.clientX, e.clientY);
+      this.curX = p.x;
+      this.curY = p.y;
+    });
+    this.canvas.addEventListener('pointerdown', (e: PointerEvent) => {
+      if (!this.active) return;
+      const p = this.clientToGame(e.clientX, e.clientY);
       if (e.button === 0) {
-        this.tryBuildScreen(e.clientX, e.clientY);
+        this.tryBuildScreen(p.x, p.y);
         e.preventDefault();
       } else if (e.button === 2) {
         this.cancel();
         e.preventDefault();
       }
     });
-    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
     // Esc 取消
     scene.input.keyboard?.on('keydown-ESC', () => this.cancel());
   }
@@ -108,11 +116,7 @@ export class BuildingPlacementController {
     this.label.setColor(placeable ? '#a8e0a8' : '#ffa0a0');
   }
 
-  private tryBuild(p: Phaser.Input.Pointer): void {
-    this.tryBuildScreen(p.x, p.y);
-  }
-
-  /** DOM 事件原始 clientX/Y 路径（与 SelectionController 对齐）。 */
+  /** 已换算为 Phaser 游戏画布坐标的放置路径。 */
   private tryBuildScreen(screenX: number, screenY: number): void {
     if (!this.selected) return;
     const def = this.selected;
@@ -126,6 +130,14 @@ export class BuildingPlacementController {
     this.game.state.pendingCommands.push({ type: 'build', playerId: PLAYER_ID, buildingTypeId: def.id, x: gx, y: gy });
     // 连续放置：扣钱后若仍可负担且不撤销，进入「继续放」体验——这里选择落一次就停，避免误操作花光钱
     this.cancel();
+  }
+
+  private clientToGame(clientX: number, clientY: number): { x: number; y: number } {
+    const rect = this.canvas.getBoundingClientRect();
+    return {
+      x: (clientX - rect.left) * (this.scene.scale.width / rect.width),
+      y: (clientY - rect.top) * (this.scene.scale.height / rect.height),
+    };
   }
 }
 

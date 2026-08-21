@@ -83,12 +83,17 @@ export class GameScene extends Phaser.Scene {
 
     this.cameraControl = new CameraController(this, cam, {
       leftButtonPan: false,
-      homeView: { x: this.sim.state.map.width / 2, y: this.sim.state.map.height / 2, zoom: 1 },
+      // CameraController 接收地图世界像素，不是 0~63 的逻辑格坐标。
+      homeView: { x: bounds.centerX, y: bounds.centerY, zoom: 1 },
     });
-    new SelectionController(this, this.sim, cam);
-    new SquadController(this, this.sim);
+    new SelectionController(this, this.sim, cam, {
+      isPointerBlocked: (x, y) => this.placement.isActive() || this.minimap.containsScreenPoint(x, y),
+    });
+    // 选择控制器先注册 DOM listener：放置模式下它会先判断 blocked 并退出，
+    // 随后的放置 listener 再落建筑，避免同一次点击又选中地图实体。
     this.placement = new BuildingPlacementController(this, this.sim, cam);
     this.placement.onCancel = () => this.refreshBuildButtons();
+    new SquadController(this, this.sim);
 
     this.tileInfoEl = document.getElementById('tile-info');
     this.selectionInfoEl = document.getElementById('selection-info');
@@ -97,7 +102,13 @@ export class GameScene extends Phaser.Scene {
     this.prodPanelEl?.addEventListener('click', (event) => this.handleProductionClick(event));
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.updateTileInfo(p));
     this.wireBuildBar();
+    this.wireViewActions();
     this.wireKeyboard();
+  }
+
+  private wireViewActions(): void {
+    document.getElementById('home-view')?.addEventListener('click', () => this.cameraControl.goHome());
+    document.getElementById('back-to-menu')?.addEventListener('click', () => window.location.reload());
   }
 
   /** 暂停/速度指示器：屏幕中央半透明大字。游戏进行中显示，胜负已结时隐藏。 */
@@ -132,11 +143,12 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** 空格暂停、1/2/3 切 1×/2×/4×。所有按键只在游戏进行中响应（胜负已结时交给结果界面）。 */
+  /** 空格暂停、Shift+1/2/3 切 1×/2×/4×；裸数字键留给编队复读。 */
   private wireKeyboard(): void {
     const kb = this.input.keyboard;
     if (!kb) return;
-    const tryRate = (scale: number) => () => {
+    const tryRate = (scale: number) => (event: KeyboardEvent) => {
+      if (!event.shiftKey) return;
       if (this.sim.state.gameOver) return;
       this.loop.setTimeScale(scale);
     };

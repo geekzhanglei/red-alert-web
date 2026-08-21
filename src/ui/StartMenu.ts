@@ -49,7 +49,7 @@ export function mountStartMenu(onPick: (d: Difficulty) => void): void {
     <h1 style="font-size:48px;margin:0;letter-spacing:.05em">红警 Web</h1>
     <p style="font-size:14px;margin:0;color:#a0b0a6;letter-spacing:.08em">原创 RTS 原型 · 选择难度开始</p>
     <div id="start-buttons" style="display:flex;gap:14px;margin-top:8px"></div>
-    <p style="font-size:11px;margin:18px 0 0;color:#6b7c72">操作：左键选中/框选 · 右键移动/攻击 · H 回主视图 · 空格暂停 · Ctrl+1~9 编队 · 1~9 复读</p>
+    <p style="font-size:11px;margin:18px 0 0;color:#6b7c72">操作：左键选中/框选 · 右键移动/攻击 · H 回主视图 · 空格暂停 · Shift+1/2/3 调速 · Ctrl+1~9 编队 · 1~9 复读</p>
   `;
   document.body.appendChild(wrap);
 

@@ -18,7 +18,10 @@ export class SquadController {
     for (let i = 0; i < SquadController.KEYS.length; i++) {
       const slot = i + 1;
       const code = SquadController.KEYS[i];
-      kb.on(`keydown-${code}` as any, (ev: KeyboardEvent) => this.onPress(slot, ev.ctrlKey || ev.metaKey));
+      kb.on(`keydown-${code}` as any, (ev: KeyboardEvent) => {
+        if (ev.shiftKey) return; // Shift+1/2/3 由游戏速度控制器使用
+        this.onPress(slot, ev.ctrlKey || ev.metaKey);
+      });
     }
   }
 

@@ -10,37 +10,9 @@ import { isEntityAnchorInRect, isPointInTileDiamond } from './selectionGeometry'
 const DRAG_THRESHOLD = 5; // 像素：小于视为点击，大于视为框选
 const UNIT_CLICK_RADIUS = 22; // 地图世界像素：单位地面锚点的点击半径
 
-/**
- * 调试 HUD：一个跟随鼠标的 8px 红点 + 文字 label（down/up/dom-up）。
- * 临时排查「点不到单位」用，确认无问题后用 ?clear=1 隐藏。
- */
-let debugCursor: HTMLDivElement | null = null;
-let debugLabel: HTMLDivElement | null = null;
-function ensureDebugHud(): void {
-  if (debugCursor && debugLabel) return;
-  debugCursor = document.createElement('div');
-  debugCursor.style.cssText =
-    'position:fixed;width:8px;height:8px;border-radius:50%;background:#ff3b3b;pointer-events:none;z-index:9999;transform:translate(-50%,-50%);display:none';
-  debugLabel = document.createElement('div');
-  debugLabel.style.cssText =
-    'position:fixed;font:12px/1 system-ui;color:#ff3b3b;background:rgba(0,0,0,.6);padding:2px 6px;border-radius:3px;pointer-events:none;z-index:9999;display:none';
-  document.body.appendChild(debugCursor);
-  document.body.appendChild(debugLabel);
-}
-function setDebugCursor(x: number, y: number, phase: string): void {
-  ensureDebugHud();
-  if (!debugCursor || !debugLabel) return;
-  debugCursor.style.left = `${x}px`;
-  debugCursor.style.top = `${y}px`;
-  debugCursor.style.display = 'block';
-  debugLabel.textContent = phase;
-  debugLabel.style.left = `${x + 12}px`;
-  debugLabel.style.top = `${y + 6}px`;
-  debugLabel.style.display = 'block';
-  setTimeout(() => {
-    if (debugLabel) debugLabel.style.display = 'none';
-    if (debugCursor) debugCursor.style.display = 'none';
-  }, 600);
+export interface SelectionControllerOptions {
+  /** 小地图、建筑放置等模式可以临时接管指针，避免一次点击触发两套命令。 */
+  isPointerBlocked?: (screenX: number, screenY: number) => boolean;
 }
 
 /**
@@ -55,11 +27,14 @@ export class SelectionController {
   private pressed = false;
   private boxActive = false;
   private box: Phaser.GameObjects.Rectangle;
+  private canvas: HTMLCanvasElement;
+  private activePointerId: number | null = null;
 
   constructor(
-    scene: Phaser.Scene,
+    private scene: Phaser.Scene,
     private game: Game,
     private cam: Phaser.Cameras.Scene2D.Camera,
+    private options: SelectionControllerOptions = {},
   ) {
     // 框选矩形：屏幕空间（scrollFactor 0），放在最上层
     this.box = scene.add
@@ -69,85 +44,62 @@ export class SelectionController {
       .setDepth(100)
       .setVisible(false);
 
-    scene.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
-      if (p.leftButtonDown()) {
-        this.pressX = p.x;
-        this.pressY = p.y;
-        this.pressed = true;
-        // 调试 HUD：显示按下点
-        setDebugCursor(p.x, p.y, 'down');
-      }
-      if (p.rightButtonDown()) this.onRightClick(p);
-    });
-    scene.input.on('pointermove', (p: Phaser.Input.Pointer) => {
-      if (!this.pressed || !p.leftButtonDown()) return;
-      if (Math.hypot(p.x - this.pressX, p.y - this.pressY) > DRAG_THRESHOLD) {
-        this.boxActive = true;
-        this.updateBox(this.pressX, this.pressY, p.x, p.y);
-        this.selectBox(this.pressX, this.pressY, p.x, p.y); // 拖拽中实时更新选中
-      }
-    });
-    scene.input.on('pointerup', (p: Phaser.Input.Pointer) => {
-      if (!this.pressed) return;
-      this.pressed = false;
-      setDebugCursor(p.x, p.y, 'up');
-      if (this.boxActive) {
-        this.boxActive = false;
-        this.box.setVisible(false);
-        this.selectBox(this.pressX, this.pressY, p.x, p.y); // 以释放位置最终结算
-      } else if (p.leftButtonReleased() && Math.hypot(p.x - this.pressX, p.y - this.pressY) < DRAG_THRESHOLD) {
-        this.selectAt(p);
-      }
-    });
-
-    // DOM 双绑定：Phaser 事件在某些环境（合成事件、专注状态切换）下不触发，
-    // 直接用 DOM 事件兜底。先 stopPropagation 避免重复处理。
-    const canvas = scene.game.canvas as HTMLCanvasElement;
+    // 选择只保留一套 DOM Pointer Events。此前 Phaser + DOM 双绑定会重复改 pressed，
+    // 且 pointermove 的 button 通常为 -1，导致兜底路径永远无法进入框选。
+    this.canvas = scene.game.canvas as HTMLCanvasElement;
+    this.canvas.style.touchAction = 'none';
     const domDown = (e: PointerEvent) => {
+      const p = this.clientToGame(e.clientX, e.clientY);
+      if (this.options.isPointerBlocked?.(p.x, p.y)) return;
       if (e.button === 2) {
-        setDebugCursor(e.clientX, e.clientY, 'dom-right');
-        this.onRightClickScreen(e.clientX, e.clientY);
+        this.onRightClickScreen(p.x, p.y);
         e.preventDefault();
         return;
       }
       if (e.button === 0) {
-        setDebugCursor(e.clientX, e.clientY, 'dom-down');
-        this.pressX = e.clientX;
-        this.pressY = e.clientY;
+        this.pressX = p.x;
+        this.pressY = p.y;
         this.pressed = true;
         this.boxActive = false;
+        this.activePointerId = e.pointerId;
+        this.canvas.setPointerCapture?.(e.pointerId);
         e.preventDefault();
       }
     };
     const domMove = (e: PointerEvent) => {
-      if (!this.pressed || e.button !== 0) return;
-      if (Math.hypot(e.clientX - this.pressX, e.clientY - this.pressY) > DRAG_THRESHOLD) {
+      if (!this.pressed || e.pointerId !== this.activePointerId) return;
+      const p = this.clientToGame(e.clientX, e.clientY);
+      if (Math.hypot(p.x - this.pressX, p.y - this.pressY) > DRAG_THRESHOLD) {
         this.boxActive = true;
-        this.updateBox(this.pressX, this.pressY, e.clientX, e.clientY);
-        this.selectBox(this.pressX, this.pressY, e.clientX, e.clientY);
+        this.updateBox(this.pressX, this.pressY, p.x, p.y);
+        this.selectBox(this.pressX, this.pressY, p.x, p.y);
       }
     };
     const domUp = (e: PointerEvent) => {
-      if (!this.pressed || e.button !== 0) return;
+      if (!this.pressed || e.pointerId !== this.activePointerId) return;
+      const p = this.clientToGame(e.clientX, e.clientY);
       this.pressed = false;
-      setDebugCursor(e.clientX, e.clientY, 'dom-up');
+      this.activePointerId = null;
       if (this.boxActive) {
         this.boxActive = false;
         this.box.setVisible(false);
-        this.selectBox(this.pressX, this.pressY, e.clientX, e.clientY);
-      } else if (Math.hypot(e.clientX - this.pressX, e.clientY - this.pressY) < DRAG_THRESHOLD) {
-        this.selectAtScreen(e.clientX, e.clientY);
+        this.selectBox(this.pressX, this.pressY, p.x, p.y);
+      } else if (Math.hypot(p.x - this.pressX, p.y - this.pressY) < DRAG_THRESHOLD) {
+        this.selectAtScreen(p.x, p.y);
       }
     };
-    canvas.addEventListener('pointerdown', domDown);
-    canvas.addEventListener('pointermove', domMove);
-    canvas.addEventListener('pointerup', domUp);
-    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-  }
-
-  /** 点击：选中最上层己方实体（单位或建筑）；点空白清空选择。 */
-  private selectAt(p: Phaser.Input.Pointer): void {
-    this.selectAtScreen(p.x, p.y);
+    const domCancel = (e: PointerEvent) => {
+      if (e.pointerId !== this.activePointerId) return;
+      this.pressed = false;
+      this.boxActive = false;
+      this.activePointerId = null;
+      this.box.setVisible(false);
+    };
+    this.canvas.addEventListener('pointerdown', domDown);
+    this.canvas.addEventListener('pointermove', domMove);
+    this.canvas.addEventListener('pointerup', domUp);
+    this.canvas.addEventListener('pointercancel', domCancel);
+    this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
   /** 用屏幕坐标（DOM 事件原始 clientX/Y）选中。 */
@@ -155,6 +107,15 @@ export class SelectionController {
     const world = this.cam.getWorldPoint(screenX, screenY);
     const hit = this.findTopmostEntity(world.x, world.y, PLAYER_ID);
     this.game.state.selectedEntityIds = hit ? [hit.id] : [];
+  }
+
+  /** DOM client 坐标 → Phaser 游戏画布坐标，兼容页面偏移与 CSS 缩放。 */
+  private clientToGame(clientX: number, clientY: number): { x: number; y: number } {
+    const rect = this.canvas.getBoundingClientRect();
+    return {
+      x: (clientX - rect.left) * (this.scene.scale.width / rect.width),
+      y: (clientY - rect.top) * (this.scene.scale.height / rect.height),
+    };
   }
 
   /** 框选：屏幕矩形反投影为地图世界矩形，选中锚点落入其中的己方实体。 */
@@ -229,10 +190,6 @@ export class SelectionController {
    * 右键：点在敌方实体（单位或建筑）上 → 对全部选中单位发 attack；否则对目标格分配落点发 move。
    * 目标格不可走则不响应。命令只入队，由下一 tick 统一应用。
    */
-  private onRightClick(p: Phaser.Input.Pointer): void {
-    this.onRightClickScreen(p.x, p.y);
-  }
-
   private onRightClickScreen(screenX: number, screenY: number): void {
     const state = this.game.state;
     const units = state.selectedEntityIds

@@ -14,15 +14,20 @@ import { getUnitFacingFrame } from './unitFacing';
 export class UnitRenderer extends Phaser.GameObjects.Graphics {
   private shots: { x1: number; y1: number; x2: number; y2: number; bornAt: number }[] = [];
   private pool: Phaser.GameObjects.Image[] = [];
+  private glowPool: (Phaser.FX.Glow | null)[] = [];
+  /** 地面选中标记放在单位贴图下方，避免光圈压住车体/人物。 */
+  private selectionGround: Phaser.GameObjects.Graphics;
 
   constructor(scene: Phaser.Scene) {
     super(scene);
     this.setDepth(31);
     scene.add.existing(this);
+    this.selectionGround = scene.add.graphics().setDepth(29);
   }
 
   update(state: GameState, alpha: number, viewerPlayerId = 0): void {
     this.clear();
+    this.selectionGround.clear();
     this.consumeShotEvents(state);
     this.drawTargetMarkers(state);
     this.drawMovePaths(state);
@@ -39,12 +44,18 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
 
     // 复用/创建 Image
     while (this.pool.length < drawable.length) {
-      this.pool.push(this.scene.add.image(0, 0, '__DEFAULT').setDepth(30));
+      const img = this.scene.add.image(0, 0, '__DEFAULT').setDepth(30);
+      const glow = img.preFX?.addGlow(0x55caff, 2.5, 0.35, false) ?? null;
+      glow?.setActive(false);
+      this.pool.push(img);
+      this.glowPool.push(glow);
     }
     for (let i = 0; i < this.pool.length; i++) {
       const img = this.pool[i];
+      const glow = this.glowPool[i];
       if (i < drawable.length) {
         const { e, px, py } = drawable[i];
+        const selected = state.selectedEntityIds.includes(e.id);
         const s = gridToScreen(px, py);
         const key = textureKeyFor(e.typeId, e.ownerId, 'unit');
         if (this.scene.textures.exists(key)) {
@@ -57,20 +68,24 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
           img.setOrigin(0.5, visual.originY);
           if (e.ownerId === 1) img.setTint(ENEMY_TINT);
           else img.clearTint();
+          glow?.setActive(selected);
           // 方向由帧表达；整张等距透视图保持直立，不再旋转画布。
           img.setRotation(0);
         } else {
           img.setVisible(false);
+          glow?.setActive(false);
         }
       } else {
         img.setVisible(false);
+        glow?.setActive(false);
       }
     }
 
-    // 选中环 + 血条（仍 Graphics）
+    // 地面光圈 + 血条。实际贴图轮廓由 PreFX Glow 高亮。
     for (const { e, px, py } of drawable) {
-      if (state.selectedEntityIds.includes(e.id)) this.drawSelectionRing(px, py);
-      this.drawHpBar(e, state, px, py);
+      const selected = state.selectedEntityIds.includes(e.id);
+      if (selected) this.drawSelectionMarker(e.typeId, px, py);
+      this.drawHpBar(e, state, px, py, selected);
     }
   }
 
@@ -92,22 +107,26 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
     }
   }
 
-  private drawSelectionRing(px: number, py: number): void {
+  private drawSelectionMarker(typeId: string, px: number, py: number): void {
     const s = gridToScreen(px, py);
-    // 与建筑共用冷色选中语言：不与敌对/警告的暖色混淆。
-    this.lineStyle(5, 0x168dff, 0.16);
-    this.strokeEllipse(s.x, s.y, 22, 12);
-    this.lineStyle(1.5, 0x7bd8ff, 0.95);
-    this.strokeEllipse(s.x, s.y, 20, 10);
+    const marker = UNIT_SELECTION_MARKERS[typeId] ?? DEFAULT_SELECTION_MARKER;
+    const pulse = 0.17 + Math.sin(this.scene.time.now / 220) * 0.035;
+    this.selectionGround.fillStyle(0x168dff, pulse);
+    this.selectionGround.fillEllipse(s.x, s.y, marker.width, marker.height);
+    this.selectionGround.lineStyle(6, 0x168dff, 0.13);
+    this.selectionGround.strokeEllipse(s.x, s.y, marker.width + 4, marker.height + 3);
+    this.selectionGround.lineStyle(1.5, 0x82ddff, 0.95);
+    this.selectionGround.strokeEllipse(s.x, s.y, marker.width, marker.height);
   }
 
-  private drawHpBar(e: EntityState, state: GameState, px: number, py: number): void {
+  private drawHpBar(e: EntityState, state: GameState, px: number, py: number, selected: boolean): void {
     const def = e.type === 'unit' ? state.defs[e.typeId] : state.buildingDefs[e.typeId];
-    if (e.hp >= def.maxHp) return;
+    const maxHp = def.maxHp * e.hpMultiplier;
+    if (e.hp >= maxHp && !selected) return;
     const s = gridToScreen(px, py);
     const w = 18;
     const h = 3;
-    const ratio = Math.max(0, e.hp / def.maxHp);
+    const ratio = Math.max(0, e.hp / maxHp);
     this.fillStyle(0x111, 0.7);
     this.fillRect(s.x - w / 2, s.y - 13, w, h);
     this.fillStyle(ratio > 0.5 ? 0x4caf50 : ratio > 0.25 ? 0xffa726 : 0xe04848, 1);
@@ -152,6 +171,13 @@ const UNIT_VISUALS: Record<string, { width: number; height: number; originY: num
   infantry: { width: 38, height: 38, originY: 0.78 },
   tank: { width: 50, height: 40, originY: 0.7 },
   harvester: { width: 60, height: 44, originY: 0.68 },
+};
+
+const DEFAULT_SELECTION_MARKER = { width: 28, height: 13 };
+const UNIT_SELECTION_MARKERS: Record<string, { width: number; height: number }> = {
+  infantry: { width: 28, height: 13 },
+  tank: { width: 44, height: 20 },
+  harvester: { width: 52, height: 23 },
 };
 
 function isVisibleTo(state: GameState, e: EntityState, viewerPlayerId: number): boolean {

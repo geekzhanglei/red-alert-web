@@ -36,6 +36,27 @@ body {
   pointer-events: none;
 }
 
+#view-actions {
+  display: flex;
+  gap: 6px;
+  pointer-events: auto;
+}
+
+#view-actions button {
+  padding: 2px 7px;
+  border: 1px solid #506253;
+  border-radius: 3px;
+  background: #1c2820;
+  color: #cfe6f2;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+#view-actions button:hover {
+  border-color: #5fc8ff;
+  background: #243a43;
+}
+
 #build-bar {
   position: fixed;
   left: 16px;
@@ -210,4 +231,3 @@ body {
   font-size: 12px;
   pointer-events: none;
 }
-

@@ -94,4 +94,9 @@ export class Minimap {
       );
     }
   }
+
+  /** 供选择控制器避让小地图，避免跳转视角的同时误清空当前选中。 */
+  containsScreenPoint(x: number, y: number): boolean {
+    return x >= this.x0 && x <= this.x0 + this.mw && y >= this.y0 && y <= this.y0 + this.mh;
+  }
 }

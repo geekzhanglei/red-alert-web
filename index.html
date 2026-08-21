@@ -13,6 +13,10 @@
         <span>资金 <span id="money">$0</span></span>
         <span id="selection-info">选择：无</span>
         <span id="tile-info">鼠标：—</span>
+        <span id="view-actions">
+          <button id="home-view" type="button" title="恢复开局的地图位置与缩放">重置视角 H</button>
+          <button id="back-to-menu" type="button" title="结束当前试玩并返回难度选择">返回菜单</button>
+        </span>
       </aside>
       <aside id="build-bar" aria-label="建造栏">
         <button type="button" data-building="refinery">矿场 $2000</button>
@@ -21,7 +25,7 @@
         <p id="build-hint">点击按钮开始放置 · 左键确认 · 右键 / Esc 取消</p>
       </aside>
       <aside id="prod-panel" aria-label="生产面板"></aside>
-      <p id="controls-hint">左键选中 · 右键移动/攻击 · 中键拖拽平移 · 滚轮缩放 · 边缘滚屏 · H 键回主视图 · Ctrl+1~9 编队 · 1~9 复读</p>
+      <p id="controls-hint">左键选中 · 右键移动/攻击 · 中键拖拽平移 · 滚轮缩放 · H 回主视图 · 空格暂停 · Shift+1/2/3 调速 · Ctrl+1~9 编队 · 1~9 复读</p>
       <div id="squad-flash" aria-hidden="true"></div>
     </main>
     <script type="module" src="/src/main.ts"></script>
