@@ -10,13 +10,13 @@ import commandCenterUrl from './optimized/building-command-center.webp';
 import refineryUrl from './optimized/building-refinery.webp';
 import barracksUrl from './optimized/building-barracks.webp';
 import factoryUrl from './optimized/building-factory.webp';
+import rocketTrooperUrl from './optimized/unit-rocket-trooper.webp';
+import scoutUrl from './optimized/unit-scout.webp';
+import artilleryUrl from './optimized/unit-artillery.webp';
+import heavyTankUrl from './optimized/unit-heavy-tank.webp';
 import { SPRITES } from './sprites';
 
-// 第一批新增单位/建筑使用内置原创 SVG，先以轻量 data URL 交付，后续可无缝替换为压缩位图。
-const rocketTrooperUrl = SPRITES.rocketTrooper;
-const scoutUrl = SPRITES.scout;
-const artilleryUrl = SPRITES.artillery;
-const heavyTankUrl = SPRITES.heavyTank;
+// 新建筑先使用内置原创 SVG；单位已升级为压缩位图四向图集。
 const powerPlantUrl = SPRITES.powerPlant();
 const guardTowerUrl = SPRITES.guardTower();
 const radarUrl = SPRITES.radar();
@@ -72,10 +72,10 @@ export function loadAllSprites(scene: Phaser.Scene): void {
     scene.load.spritesheet(`unit_infantry_${o}`, infantryUrl, UNIT_FACING_SHEET);
     scene.load.spritesheet(`unit_tank_${o}`, tankUrl, UNIT_FACING_SHEET);
     scene.load.spritesheet(`unit_harvester_${o}`, harvesterUrl, UNIT_FACING_SHEET);
-    scene.load.spritesheet(`unit_rocketTrooper_${o}`, rocketTrooperUrl, UNIT_FACING_SHEET);
-    scene.load.spritesheet(`unit_scout_${o}`, scoutUrl, UNIT_FACING_SHEET);
-    scene.load.spritesheet(`unit_artillery_${o}`, artilleryUrl, UNIT_FACING_SHEET);
-    scene.load.spritesheet(`unit_heavyTank_${o}`, heavyTankUrl, UNIT_FACING_SHEET);
+    scene.load.spritesheet(`unit_rocketTrooper_${o}`, rocketTrooperUrl, NEW_UNIT_FACING_SHEET);
+    scene.load.spritesheet(`unit_scout_${o}`, scoutUrl, NEW_UNIT_FACING_SHEET);
+    scene.load.spritesheet(`unit_artillery_${o}`, artilleryUrl, NEW_UNIT_FACING_SHEET);
+    scene.load.spritesheet(`unit_heavyTank_${o}`, heavyTankUrl, NEW_UNIT_FACING_SHEET);
   }
   // 建筑
   for (const o of [0, 1]) {
@@ -91,6 +91,8 @@ export function loadAllSprites(scene: Phaser.Scene): void {
 
 // 运行时方向图优化为 256×256 的 2×2 排列，每格依次是 SE、SW、NW、NE。
 const UNIT_FACING_SHEET = { frameWidth: 128, frameHeight: 128 };
+// 新生成的 512×512 图集为 2×2 四向，每帧 256×256。
+const NEW_UNIT_FACING_SHEET = { frameWidth: 256, frameHeight: 256 };
 
 export function textureKeyFor(typeId: string, owner: number, kind: 'unit' | 'building'): string {
   const prefix = kind === 'unit' ? 'unit' : 'bld';
