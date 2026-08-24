@@ -5,6 +5,8 @@ import { gridToScreen } from './isometric';
 import { FOG_VISIBLE, getFog } from '../state/visibility';
 import { textureKeyFor } from '../../assets/loadSprites';
 import { getUnitFacingFrame } from './unitFacing';
+import { getUnitMotionVisual } from './unitAnimation';
+import type { UnitMotionVisual } from './unitAnimation';
 
 /**
  * 单位渲染层（贴图版）：用对象池管理单位 Image，每帧 setPosition/setRotation/setTexture。
@@ -43,7 +45,7 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
 
     // 先画接地阴影，再画单位本体。阴影固定在地格中心，能稳定住等距视角下的视觉锚点，
     // 移动时只沿真实位移方向留下很短的尘迹，不做上下 bob，避免单位像漂浮在地图上。
-    this.drawGrounding(drawable);
+    this.drawGrounding(drawable, state, alpha);
 
     // 复用/创建 Image
     while (this.pool.length < drawable.length) {
@@ -69,6 +71,9 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
           const visual = UNIT_VISUALS[e.typeId] ?? DEFAULT_UNIT_VISUAL;
           img.setDisplaySize(visual.width, visual.height);
           img.setOrigin(0.5, visual.originY);
+          const motion = getUnitMotionVisual(e, state.tick, alpha);
+          // 轻微横向步伐形变让静态方向图集有行进节奏；纵向比例保持不变，接地点不会上下跳。
+          img.setScale(img.scaleX * motion.scaleX, img.scaleY);
           if (e.ownerId === 1) img.setTint(ENEMY_TINT);
           else img.clearTint();
           glow?.setActive(selected);
@@ -123,7 +128,7 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
     this.fillRect(s.x - w / 2, s.y - 13, w * ratio, h);
   }
 
-  private drawGrounding(drawable: { e: EntityState; px: number; py: number }[]): void {
+  private drawGrounding(drawable: { e: EntityState; px: number; py: number }[], state: GameState, alpha: number): void {
     for (const { e, px, py } of drawable) {
       const current = gridToScreen(px, py);
       const visual = UNIT_VISUALS[e.typeId] ?? DEFAULT_UNIT_VISUAL;
@@ -134,16 +139,45 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
       this.groundLayer.fillEllipse(current.x, current.y + 2, shadowWidth, shadowHeight);
 
       if (e.activity !== 'moving') continue;
+      const motion = getUnitMotionVisual(e, state.tick, alpha);
       const previous = gridToScreen(e.prevX, e.prevY);
       const dx = current.x - previous.x;
       const dy = current.y - previous.y;
-      const distance = Math.hypot(dx, dy);
+      let distance = Math.hypot(dx, dy);
+      // alpha 接近 0 时本帧还没产生可见位移，退回到逻辑朝向，尘迹仍然有稳定方向。
+      if (distance < 0.01) {
+        const worldDx = Math.cos(e.facing);
+        const worldDy = Math.sin(e.facing);
+        const facingScreen = gridToScreen(worldDx, worldDy);
+        distance = Math.hypot(facingScreen.x, facingScreen.y);
+        if (distance > 0) {
+          this.drawMotionDust(current.x, current.y, facingScreen.x, facingScreen.y, distance, motion);
+        }
+        continue;
+      }
       if (distance < 0.01) continue;
 
       // 尘迹长度按本帧实际位移计算，不会在单位停下后继续漂移。
       const trail = Math.min(9, distance * 2.4);
       this.groundLayer.lineStyle(2, 0xc6c7a7, 0.16);
       this.groundLayer.lineBetween(current.x, current.y + 2, current.x - (dx / distance) * trail, current.y + 2 - (dy / distance) * trail);
+      this.drawMotionDust(current.x, current.y, dx, dy, distance, motion);
+    }
+  }
+
+  private drawMotionDust(x: number, y: number, dx: number, dy: number, distance: number, motion: UnitMotionVisual): void {
+    const backX = -dx / distance;
+    const backY = -dy / distance;
+    const sideX = -backY;
+    const sideY = backX;
+    const pulse = Math.max(0, Math.sin(motion.phase * Math.PI * 2));
+    for (let i = 0; i < 2; i++) {
+      const spread = (i === 0 ? -1 : 1) * (1.5 + pulse * 1.5);
+      const offset = 4 + i * 3 + (1 - pulse) * 2;
+      const puffX = x + backX * offset + sideX * spread;
+      const puffY = y + 2 + backY * offset + sideY * spread;
+      this.groundLayer.fillStyle(0xbfc7ae, 0.08 + pulse * 0.14);
+      this.groundLayer.fillEllipse(puffX, puffY, 2.2 + pulse * 2.2, 1.4 + pulse * 1.4);
     }
   }
 

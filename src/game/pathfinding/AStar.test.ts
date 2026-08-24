@@ -46,12 +46,17 @@ describe('A* 寻路', () => {
     }
   });
 
-  it('斜角不能穿墙角（一侧被挡时不允许斜穿）', () => {
-    // (0,1) 被挡：从 (0,0) 斜走到 (1,1) 需要两侧 (1,0)/(0,1) 都可走，此处不允许 → 第一步必须是 (1,0)
+  it('只生成横向/纵向折线路径，不生成对角航段', () => {
+    // 即使目标位于斜对角，路径也必须先走横向或纵向，再转弯。
     const map = makeMap(3, 3, [{ x: 0, y: 1 }]);
     const path = findPath(map, { x: 0, y: 0 }, { x: 2, y: 2 }, isWalkable(map));
     expect(path.length).toBeGreaterThan(0);
     expect(path[0]).toEqual({ x: 1, y: 0 });
+    let previous = { x: 0, y: 0 };
+    for (const point of path) {
+      expect(point.x === previous.x || point.y === previous.y).toBe(true);
+      previous = point;
+    }
   });
 
   it('被围死时返回空（不可达）', () => {
@@ -75,10 +80,11 @@ describe('A* 寻路', () => {
     const map = makeMap(10, 10, [{ x: 4, y: 2 }, { x: 4, y: 3 }, { x: 4, y: 4 }, { x: 4, y: 5 }]);
     const path = findPath(map, { x: 0, y: 0 }, { x: 8, y: 8 }, isWalkable(map));
     expect(path.length).toBeGreaterThan(0);
-    // 每步相邻
+    // 每步相邻且不能斜走
     let prev = { x: 0, y: 0 };
     for (const p of path) {
       expect(Math.max(Math.abs(p.x - prev.x), Math.abs(p.y - prev.y))).toBe(1);
+      expect(p.x === prev.x || p.y === prev.y).toBe(true);
       prev = p;
     }
     expect(prev).toEqual({ x: 8, y: 8 });

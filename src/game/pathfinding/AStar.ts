@@ -5,23 +5,17 @@ export interface GridPoint {
   y: number;
 }
 
-/** 八方向移动（上下左右 + 四斜角）。 */
+/** 四方向移动（上下左右）。等距画面里每一步会投影成一条斜边，连续步骤自然形成折线路径。 */
 const DIRS: ReadonlyArray<readonly [number, number]> = [
   [1, 0],
   [-1, 0],
   [0, 1],
   [0, -1],
-  [1, 1],
-  [1, -1],
-  [-1, 1],
-  [-1, -1],
 ];
 
-/** 八方向（octile）启发式；×1.001 轻微高估，换取更少的探索格子，路径仍接近最优。 */
-function octile(a: GridPoint, b: GridPoint): number {
-  const dx = Math.abs(a.x - b.x);
-  const dy = Math.abs(a.y - b.y);
-  return (Math.max(dx, dy) + (Math.SQRT2 - 1) * Math.min(dx, dy)) * 1.001;
+/** 四方向网格的曼哈顿启发式，保证 A* 不会生成对角航段。 */
+function manhattan(a: GridPoint, b: GridPoint): number {
+  return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 }
 
 interface SearchNode extends GridPoint {
@@ -90,10 +84,10 @@ export class MinHeap<T> {
 const MAX_EXPAND = 5000;
 
 /**
- * A* 寻路：在网格上找从 start 到 goal 的最短路径（八邻）。
+ * A* 寻路：在网格上找从 start 到 goal 的最短路径（四邻）。
  * 返回不含 start、含 goal 的航点序列；不可达/越界/超上限返回空数组。
  * canTraverse 由调用方提供（障碍物、建筑占用、兵种通行规则都由此表达）。
- * 斜角移动要求两侧格可走，避免「穿墙角」。
+ * 单位每次只跨越一个横向或纵向相邻格，移动轨迹始终是可读的折线。
  */
 export function findPath(
   map: MapState,
@@ -108,7 +102,7 @@ export function findPath(
   const nodes = new Map<number, SearchNode>();
   const heap = new MinHeap<SearchNode>((a, b) => a.f < b.f);
 
-  const startNode: SearchNode = { x: start.x, y: start.y, g: 0, f: octile(start, goal), parent: null, closed: false };
+  const startNode: SearchNode = { x: start.x, y: start.y, g: 0, f: manhattan(start, goal), parent: null, closed: false };
   nodes.set(key(start.x, start.y), startNode);
   heap.push(startNode);
 
@@ -134,26 +128,21 @@ export function findPath(
       const nx = current.x + dx;
       const ny = current.y + dy;
       if (!isInside(map, nx, ny)) continue;
-      // 斜角穿越：两侧格也必须可走，否则单位会擦着墙角斜穿过去
-      if (dx !== 0 && dy !== 0) {
-        if (!canTraverse(current.x + dx, current.y) || !canTraverse(current.x, current.y + dy)) continue;
-      }
       if (!canTraverse(nx, ny)) continue;
 
-      const step = dx !== 0 && dy !== 0 ? Math.SQRT2 : 1;
-      const g = current.g + step;
+      const g = current.g + 1;
       const k = key(nx, ny);
       const existing = nodes.get(k);
       if (existing) {
         if (!existing.closed && g < existing.g) {
           existing.g = g;
-          existing.f = g + octile(existing, goal);
+          existing.f = g + manhattan(existing, goal);
           existing.parent = current;
           heap.push(existing); // 惰性：旧条目 pop 时会被 closed 跳过
         }
         continue;
       }
-      const node: SearchNode = { x: nx, y: ny, g, f: g + octile({ x: nx, y: ny }, goal), parent: current, closed: false };
+      const node: SearchNode = { x: nx, y: ny, g, f: g + manhattan({ x: nx, y: ny }, goal), parent: current, closed: false };
       nodes.set(k, node);
       heap.push(node);
     }
