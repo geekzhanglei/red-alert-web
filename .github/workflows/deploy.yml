@@ -97,7 +97,13 @@ jobs:
             tar -xzf /tmp/red-alert-web-dist-${{ github.sha }}.tar.gz -C "$RELEASE_DIR"
             ln -sfn "$RELEASE_DIR" "$CURRENT_LINK"
             rm -f /tmp/red-alert-web-dist-${{ github.sha }}.tar.gz
-            find "$APP_DIR/releases" -mindepth 1 -maxdepth 1 -type d | sort | head -n -5 | xargs -r rm -rf
+            # 按目录修改时间保留最近 5 个版本；不能按 SHA 字典序清理，否则新版本可能被误删，
+            # current 会指向一个不存在的目录并让 Nginx 返回 404。
+            find "$APP_DIR/releases" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' \
+              | sort -nr \
+              | tail -n +6 \
+              | cut -d' ' -f2- \
+              | xargs -r rm -rf
           '
 
       - name: Verify public site
