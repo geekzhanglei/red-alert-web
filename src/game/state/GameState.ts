@@ -140,7 +140,8 @@ function spawnTestSetup(state: GameState): void {
   const refSpot = findBuildableSpot(state.map, 2, 2, 27, 22)!;
   spawnBuilding(state, 'refinery', 0, refSpot.x, refSpot.y);
   const harvSpot = findAdjacentFreeSpot(state.map, refSpot.x, refSpot.y, 2, 2, 26, 23)!;
-  spawnUnit(state, 'harvester', 0, harvSpot.x + 0.5, harvSpot.y + 0.5);
+  // 单位以整数地格中心为出生锚点；避免从建筑出口出生时产生半格偏移。
+  spawnUnit(state, 'harvester', 0, harvSpot.x, harvSpot.y);
 
   spawnUnit(state, 'tank', 0, 30, 30);
   spawnUnit(state, 'tank', 0, 32, 30);

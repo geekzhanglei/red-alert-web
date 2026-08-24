@@ -14,12 +14,9 @@ import rocketTrooperUrl from './optimized/unit-rocket-trooper.webp';
 import scoutUrl from './optimized/unit-scout.webp';
 import artilleryUrl from './optimized/unit-artillery.webp';
 import heavyTankUrl from './optimized/unit-heavy-tank.webp';
-import { SPRITES } from './sprites';
-
-// 新建筑先使用内置原创 SVG；单位已升级为压缩位图四向图集。
-const powerPlantUrl = SPRITES.powerPlant();
-const guardTowerUrl = SPRITES.guardTower();
-const radarUrl = SPRITES.radar();
+import powerPlantUrl from './optimized/building-power-plant.webp';
+import guardTowerUrl from './optimized/building-guard-tower.webp';
+import radarUrl from './optimized/building-radar.webp';
 
 const RUNTIME_ASSET_URLS = [
   terrainGrassUrl,

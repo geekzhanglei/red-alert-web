@@ -59,6 +59,9 @@ describe('生产与电力', () => {
     const dx = Math.abs(infant.tileX - barracks.x);
     const dy = Math.abs(infant.tileY - barracks.y);
     expect(Math.max(dx, dy)).toBeLessThanOrEqual(3);
+    // 渲染层以整数地格中心插值；半格出生会让单位看起来一直偏离地面菱形。
+    expect(Number.isInteger(infant.x)).toBe(true);
+    expect(Number.isInteger(infant.y)).toBe(true);
   });
 
   it('缺电时生产速度减半（buildTicks×2）', () => {

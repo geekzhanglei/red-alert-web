@@ -62,7 +62,8 @@ function trySpawn(state: GameState, e: EntityState, unitTypeId: string): boolean
   const def = state.buildingDefs[e.typeId];
   const spot = findSpawnSpot(state, e, def.footprint.w, def.footprint.h);
   if (!spot) return false;
-  spawnUnit(state, unitTypeId, e.ownerId, spot.x + 0.5, spot.y + 0.5);
+  // 出生点使用地格中心，和地图/路径坐标保持同一坐标系。
+  spawnUnit(state, unitTypeId, e.ownerId, spot.x, spot.y);
   return true;
 }
 

@@ -15,15 +15,18 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
   private shots: { x1: number; y1: number; x2: number; y2: number; bornAt: number }[] = [];
   private pool: Phaser.GameObjects.Image[] = [];
   private glowPool: (Phaser.FX.Glow | null)[] = [];
+  private groundLayer: Phaser.GameObjects.Graphics;
 
   constructor(scene: Phaser.Scene) {
     super(scene);
     this.setDepth(31);
     scene.add.existing(this);
+    this.groundLayer = scene.add.graphics().setDepth(29);
   }
 
   update(state: GameState, alpha: number, viewerPlayerId = 0): void {
     this.clear();
+    this.groundLayer.clear();
     this.consumeShotEvents(state);
     this.drawTargetMarkers(state);
     this.drawMovePaths(state);
@@ -37,6 +40,10 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
       drawable.push({ e, px: this.lerp(e.prevX, e.x, alpha), py: this.lerp(e.prevY, e.y, alpha) });
     }
     drawable.sort((a, b) => a.px + a.py - (b.px + b.py));
+
+    // 先画接地阴影，再画单位本体。阴影固定在地格中心，能稳定住等距视角下的视觉锚点，
+    // 移动时只沿真实位移方向留下很短的尘迹，不做上下 bob，避免单位像漂浮在地图上。
+    this.drawGrounding(drawable);
 
     // 复用/创建 Image
     while (this.pool.length < drawable.length) {
@@ -116,6 +123,30 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
     this.fillRect(s.x - w / 2, s.y - 13, w * ratio, h);
   }
 
+  private drawGrounding(drawable: { e: EntityState; px: number; py: number }[]): void {
+    for (const { e, px, py } of drawable) {
+      const current = gridToScreen(px, py);
+      const visual = UNIT_VISUALS[e.typeId] ?? DEFAULT_UNIT_VISUAL;
+      const shadowWidth = Math.max(16, visual.width * 0.58);
+      const shadowHeight = e.typeId === 'infantry' || e.typeId === 'rocketTrooper' ? 4 : 6;
+
+      this.groundLayer.fillStyle(0x061018, e.activity === 'moving' ? 0.24 : 0.34);
+      this.groundLayer.fillEllipse(current.x, current.y + 2, shadowWidth, shadowHeight);
+
+      if (e.activity !== 'moving') continue;
+      const previous = gridToScreen(e.prevX, e.prevY);
+      const dx = current.x - previous.x;
+      const dy = current.y - previous.y;
+      const distance = Math.hypot(dx, dy);
+      if (distance < 0.01) continue;
+
+      // 尘迹长度按本帧实际位移计算，不会在单位停下后继续漂移。
+      const trail = Math.min(9, distance * 2.4);
+      this.groundLayer.lineStyle(2, 0xc6c7a7, 0.16);
+      this.groundLayer.lineBetween(current.x, current.y + 2, current.x - (dx / distance) * trail, current.y + 2 - (dy / distance) * trail);
+    }
+  }
+
   private drawMovePaths(state: GameState): void {
     for (const id of state.selectedEntityIds) {
       const e = state.entities[id];
@@ -149,15 +180,16 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
 
 const ENEMY_TINT = 0xc94a55;
 
-const DEFAULT_UNIT_VISUAL = { width: 32, height: 32, originY: 0.7 };
+const DEFAULT_UNIT_VISUAL = { width: 32, height: 32, originY: 0.92 };
 const UNIT_VISUALS: Record<string, { width: number; height: number; originY: number }> = {
-  infantry: { width: 46, height: 48, originY: 0.84 },
-  tank: { width: 58, height: 48, originY: 0.72 },
-  harvester: { width: 60, height: 44, originY: 0.68 },
-  rocketTrooper: { width: 48, height: 50, originY: 0.82 },
-  scout: { width: 64, height: 48, originY: 0.72 },
-  artillery: { width: 70, height: 54, originY: 0.7 },
-  heavyTank: { width: 72, height: 56, originY: 0.7 },
+  // 原创图集的接触点都在帧底部附近，统一锚到地面而不是锚到图像几何中心。
+  infantry: { width: 46, height: 48, originY: 0.92 },
+  tank: { width: 58, height: 48, originY: 0.92 },
+  harvester: { width: 60, height: 44, originY: 0.92 },
+  rocketTrooper: { width: 48, height: 50, originY: 0.95 },
+  scout: { width: 64, height: 48, originY: 0.94 },
+  artillery: { width: 70, height: 54, originY: 0.94 },
+  heavyTank: { width: 72, height: 56, originY: 0.94 },
 };
 
 function isVisibleTo(state: GameState, e: EntityState, viewerPlayerId: number): boolean {
