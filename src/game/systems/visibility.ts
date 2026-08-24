@@ -26,8 +26,8 @@ export function updateVisibility(state: GameState): void {
 
 function visionRangeOf(state: GameState, e: import('../state/entities').EntityState): number {
   if (e.type === 'building') {
-    // 建筑视野（基地/矿场/兵营/工厂）= 单位最高 vision × 1.5
-    return 8;
+    // 普通建筑提供稳定的基地视野，雷达站通过定义扩大侦察范围。
+    return state.buildingDefs[e.typeId].visionRange ?? 8;
   }
   return state.defs[e.typeId].visionRange;
 }

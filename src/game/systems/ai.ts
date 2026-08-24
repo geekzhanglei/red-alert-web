@@ -13,8 +13,7 @@ import { tileAt } from '../state/map';
 
 const AI_PLAYER_ID = 1;
 const STRATEGIC_PERIOD = 30; // 战略层每 30 tick 醒一次（约 1.5 秒）
-const DEFAULT_BUILD_ORDER = ['refinery', 'power_proxy', 'barracks', 'power_proxy', 'factory', 'power_proxy'];
-// power_proxy = 基地（AI 已建）；下面 replace_power_proxy 用基地替代「多建电厂」
+const DEFAULT_BUILD_ORDER = ['refinery', 'powerPlant', 'barracks', 'guardTower', 'factory', 'radar'];
 
 /** 难度对 AI 节奏的微调：简单让 AI 慢、迟钝；困难让 AI 更快、阈值更低。 */
 const DIFFICULTY_AI: Record<string, { nextThinkTick: number; attackThreshold: number; threatThreshold: number }> = {
@@ -157,11 +156,6 @@ function tacticalAct(state: GameState): void {
 function ensureBuildingConstruction(state: GameState, brain: AiBrainState, pid: number): void {
   while (brain.buildIndex < DEFAULT_BUILD_ORDER.length) {
     const item = DEFAULT_BUILD_ORDER[brain.buildIndex];
-    if (item === 'power_proxy') {
-      // 没有专门的电厂：让基地多产电是固定的，这里跳到下一个
-      brain.buildIndex++;
-      continue;
-    }
     const def = state.buildingDefs[item];
     if (!def) {
       brain.buildIndex++;

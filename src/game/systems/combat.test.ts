@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { TICK_MS } from '../core/GameLoop';
 import { Game } from '../core/Game';
 import { createInitialGameState } from '../state/GameState';
-import { spawnUnit } from '../state/entities';
+import { spawnBuilding, spawnUnit } from '../state/entities';
 
 function countShots(state: import('../state/GameState').GameState): number {
   return state.events.filter((ev) => ev.type === 'shot').length;
@@ -98,5 +98,15 @@ describe('战斗系统', () => {
     game.update(TICK_MS);
     expect(a.attackTargetId).toBeNull();
     expect(a.activity).toBe('idle');
+  });
+
+  it('警戒塔会自动锁定射程内敌人并造成伤害', () => {
+    const game = new Game(createInitialGameState({ testUnits: false }));
+    const tower = spawnBuilding(game.state, 'guardTower', 0, 10, 10);
+    const target = spawnUnit(game.state, 'infantry', 1, 13, 10);
+    game.update(TICK_MS);
+    expect(tower.attackTargetId).toBe(target.id);
+    expect(target.hp).toBeLessThan(game.state.defs.infantry.maxHp);
+    expect(countShots(game.state)).toBe(1);
   });
 });

@@ -97,7 +97,7 @@ describe('升级命令（docs/10-selection-panel.md）', () => {
   it('升级兵营：解锁一个新单位生产', () => {
     const game = makeGame();
     const b = spawnBuilding(game.state, 'barracks', 0, 5, 5);
-    expect(game.state.buildingDefs['barracks'].produces).toEqual(['infantry']);
+    expect(game.state.buildingDefs['barracks'].produces).toEqual(['infantry', 'rocketTrooper']);
     game.state.pendingCommands.push({ type: 'upgrade', playerId: 0, entityId: b.id });
     game.update(TICK_MS);
     expect(b.producesExtra.length).toBe(1);

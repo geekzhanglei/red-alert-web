@@ -10,6 +10,16 @@ import commandCenterUrl from './optimized/building-command-center.webp';
 import refineryUrl from './optimized/building-refinery.webp';
 import barracksUrl from './optimized/building-barracks.webp';
 import factoryUrl from './optimized/building-factory.webp';
+import { SPRITES } from './sprites';
+
+// 第一批新增单位/建筑使用内置原创 SVG，先以轻量 data URL 交付，后续可无缝替换为压缩位图。
+const rocketTrooperUrl = SPRITES.rocketTrooper;
+const scoutUrl = SPRITES.scout;
+const artilleryUrl = SPRITES.artillery;
+const heavyTankUrl = SPRITES.heavyTank;
+const powerPlantUrl = SPRITES.powerPlant();
+const guardTowerUrl = SPRITES.guardTower();
+const radarUrl = SPRITES.radar();
 
 const RUNTIME_ASSET_URLS = [
   terrainGrassUrl,
@@ -23,6 +33,13 @@ const RUNTIME_ASSET_URLS = [
   refineryUrl,
   barracksUrl,
   factoryUrl,
+  rocketTrooperUrl,
+  scoutUrl,
+  artilleryUrl,
+  heavyTankUrl,
+  powerPlantUrl,
+  guardTowerUrl,
+  radarUrl,
 ];
 
 let warmedImages: HTMLImageElement[] | null = null;
@@ -55,6 +72,10 @@ export function loadAllSprites(scene: Phaser.Scene): void {
     scene.load.spritesheet(`unit_infantry_${o}`, infantryUrl, UNIT_FACING_SHEET);
     scene.load.spritesheet(`unit_tank_${o}`, tankUrl, UNIT_FACING_SHEET);
     scene.load.spritesheet(`unit_harvester_${o}`, harvesterUrl, UNIT_FACING_SHEET);
+    scene.load.spritesheet(`unit_rocketTrooper_${o}`, rocketTrooperUrl, UNIT_FACING_SHEET);
+    scene.load.spritesheet(`unit_scout_${o}`, scoutUrl, UNIT_FACING_SHEET);
+    scene.load.spritesheet(`unit_artillery_${o}`, artilleryUrl, UNIT_FACING_SHEET);
+    scene.load.spritesheet(`unit_heavyTank_${o}`, heavyTankUrl, UNIT_FACING_SHEET);
   }
   // 建筑
   for (const o of [0, 1]) {
@@ -62,6 +83,9 @@ export function loadAllSprites(scene: Phaser.Scene): void {
     scene.load.image(`bld_refinery_${o}`, refineryUrl);
     scene.load.image(`bld_barracks_${o}`, barracksUrl);
     scene.load.image(`bld_factory_${o}`, factoryUrl);
+    scene.load.image(`bld_powerPlant_${o}`, powerPlantUrl);
+    scene.load.image(`bld_guardTower_${o}`, guardTowerUrl);
+    scene.load.image(`bld_radar_${o}`, radarUrl);
   }
 }
 

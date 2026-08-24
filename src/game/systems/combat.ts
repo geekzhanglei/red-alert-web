@@ -1,6 +1,7 @@
 import { GameState } from '../state/GameState';
 import { EntityState, removeEntity } from '../state/entities';
 import { ArmorType } from '../data/units';
+import { WeaponDefinition } from '../data/units';
 
 /** 取实体护甲类型：建筑查 buildingDefs，单位查 defs。 */
 function armorOf(state: GameState, e: EntityState): ArmorType {
@@ -17,9 +18,21 @@ function armorOf(state: GameState, e: EntityState): ArmorType {
 export function updateCombat(state: GameState, dt: number): void {
   for (const id of [...state.entitiesOrder]) {
     const e = state.entities[id];
-    if (!e || e.type !== 'unit') continue;
-    const weapon = state.defs[e.typeId].weapon;
+    if (!e) continue;
+    const weapon = weaponOf(state, e);
     if (!weapon) continue; // 无武器单位（如采矿车）不参与战斗
+
+    // 防御建筑没有移动指令：在射程内自动选择最近敌人，目标离开射程后重新搜索。
+    if (e.type === 'building') {
+      const current = e.attackTargetId == null ? null : state.entities[e.attackTargetId];
+      if (!current || current.ownerId === e.ownerId || Math.hypot(current.x - e.x, current.y - e.y) > weapon.range + 0.1) {
+        const target = findNearestEnemyInRange(state, e, weapon.range);
+        e.attackTargetId = target?.id ?? null;
+        e.activity = target ? 'attacking' : 'idle';
+        e.command = target ? { type: 'attack', targetEntityId: target.id } : null;
+      }
+      if (e.attackTargetId == null) continue;
+    }
 
     if (e.attackTargetId == null) {
       if (e.activity === 'attacking') {
@@ -43,6 +56,12 @@ export function updateCombat(state: GameState, dt: number): void {
     const dist = Math.hypot(dx, dy);
 
     if (dist > weapon.range + 0.1) {
+      if (e.type === 'building') {
+        e.attackTargetId = null;
+        e.activity = 'idle';
+        e.command = null;
+        continue;
+      }
       chase(state, e, target, weapon.range, dt);
       continue;
     }
@@ -51,10 +70,29 @@ export function updateCombat(state: GameState, dt: number): void {
       e.reloadLeft--;
       continue;
     }
-    fire(state, e, target);
+    fire(state, e, target, weapon);
     e.reloadLeft = weapon.reloadTicks;
     e.activity = 'attacking';
   }
+}
+
+function weaponOf(state: GameState, e: EntityState): WeaponDefinition | undefined {
+  return e.type === 'unit' ? state.defs[e.typeId].weapon : state.buildingDefs[e.typeId].weapon;
+}
+
+function findNearestEnemyInRange(state: GameState, source: EntityState, range: number): EntityState | null {
+  let best: EntityState | null = null;
+  let bestDistance = Infinity;
+  for (const id of state.entitiesOrder) {
+    const target = state.entities[id];
+    if (!target || target.ownerId === source.ownerId) continue;
+    const distance = Math.hypot(target.x - source.x, target.y - source.y);
+    if (distance <= range + 0.1 && distance < bestDistance) {
+      best = target;
+      bestDistance = distance;
+    }
+  }
+  return best;
 }
 
 /** 直线追入射程边缘（不寻路：战斗追击保持简单，寻路留给 move 命令）。 */
@@ -71,8 +109,7 @@ function chase(state: GameState, e: EntityState, target: EntityState, range: num
 }
 
 /** 命中即结算：伤害按装甲修正 × 攻击方升级倍率；hp ≤ 0 走统一死亡清理；同时产生瞬态弹道事件供渲染。 */
-function fire(state: GameState, e: EntityState, target: EntityState): void {
-  const weapon = state.defs[e.typeId].weapon!;
+function fire(state: GameState, e: EntityState, target: EntityState, weapon: WeaponDefinition): void {
   const mod = weapon.modifiers[armorOf(state, target)] ?? 1;
   // 目标血量上限也吃升级倍率（用合成的有效 maxHp 推算）
   const tgtDef = target.type === 'building' ? state.buildingDefs[target.typeId] : state.defs[target.typeId];

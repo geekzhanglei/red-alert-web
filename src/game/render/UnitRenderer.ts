@@ -154,6 +154,10 @@ const UNIT_VISUALS: Record<string, { width: number; height: number; originY: num
   infantry: { width: 46, height: 48, originY: 0.84 },
   tank: { width: 58, height: 48, originY: 0.72 },
   harvester: { width: 60, height: 44, originY: 0.68 },
+  rocketTrooper: { width: 48, height: 50, originY: 0.82 },
+  scout: { width: 64, height: 48, originY: 0.72 },
+  artillery: { width: 70, height: 54, originY: 0.7 },
+  heavyTank: { width: 72, height: 56, originY: 0.7 },
 };
 
 function isVisibleTo(state: GameState, e: EntityState, viewerPlayerId: number): boolean {

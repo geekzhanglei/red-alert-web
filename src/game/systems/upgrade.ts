@@ -29,7 +29,7 @@ export function applyUpgrade(state: GameState, e: EntityState): void {
     return;
   }
   // 其他建筑：解锁一个 existing but not-yet-produced unit
-  const candidates = ['infantry', 'tank', 'harvester'].filter(
+  const candidates = Object.keys(state.defs).filter(
     (u) => !def.produces.includes(u) && !e.producesExtra.includes(u) && state.defs[u],
   );
   if (candidates.length > 0) e.producesExtra.push(candidates[0]);

@@ -282,6 +282,12 @@ export class GameScene extends Phaser.Scene {
           html += `<div class="stat-row"><span class="lbl">护甲</span><span>${def.armor}</span></div>`;
           html += `<div class="stat-row"><span class="lbl">占地</span><span>${def.footprint.w}×${def.footprint.h}</span></div>`;
           html += `<div class="stat-row"><span class="lbl">电力</span><span>${def.powerProvided + sample.powerBonus} / 消耗 ${def.powerConsumed}</span></div>`;
+          if (def.weapon) {
+            html += `<div class="stat-row"><span class="lbl">防御</span><span>${def.weapon.damage} / 射程 ${def.weapon.range} / 冷却 ${def.weapon.reloadTicks}t</span></div>`;
+          }
+          if (def.visionRange) {
+            html += `<div class="stat-row"><span class="lbl">视野</span><span>${def.visionRange} 格</span></div>`;
+          }
           const allProduces = Array.from(new Set([...def.produces, ...sample.producesExtra]));
           if (allProduces.length > 0) {
             html += `<div class="stat-row"><span class="lbl">生产</span><span>${allProduces.map((p) => state.defs[p]?.name ?? p).join(' · ')}</span></div>`;

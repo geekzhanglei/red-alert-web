@@ -902,6 +902,61 @@ kbd {
   transform: skewY(-25deg);
 }
 
+.build-icon-power::before {
+  right: 8px;
+  bottom: 7px;
+  left: 8px;
+  height: 19px;
+  border: 2px solid #d4a650;
+  background: linear-gradient(90deg, transparent 0 28%, #d4a650 29% 36%, transparent 37% 64%, #d4a650 65% 72%, transparent 73%);
+}
+
+.build-icon-power::after {
+  top: 5px;
+  left: 9px;
+  width: 16px;
+  height: 12px;
+  border: 2px solid #7eb9c4;
+  border-radius: 50% 50% 0 0;
+}
+
+.build-icon-tower::before {
+  right: 10px;
+  bottom: 5px;
+  left: 10px;
+  height: 21px;
+  border: 2px solid #7e9eaa;
+  background: linear-gradient(135deg, transparent 44%, #c99f53 45% 53%, transparent 54%);
+}
+
+.build-icon-tower::after {
+  top: 6px;
+  left: 11px;
+  width: 20px;
+  height: 8px;
+  border: 2px solid #c99f53;
+  border-radius: 50%;
+}
+
+.build-icon-radar::before {
+  right: 6px;
+  bottom: 7px;
+  left: 6px;
+  height: 16px;
+  border: 2px solid #668f9e;
+  background: linear-gradient(135deg, transparent 48%, #668f9e 49% 56%, transparent 57%);
+}
+
+.build-icon-radar::after {
+  top: 5px;
+  left: 17px;
+  width: 2px;
+  height: 19px;
+  background: #c3d0d0;
+  box-shadow: 5px 4px 0 -0.5px #65cce6;
+  transform: rotate(35deg);
+}
+
 #build-bar button:disabled,
 #prod-panel button:disabled {
   opacity: 0.38;

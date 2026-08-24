@@ -118,6 +118,9 @@ const ORIGINAL_BUILDING_SIZE: Record<string, { w: number; h: number }> = {
   factory: { w: 192, h: 144 },
   barracks: { w: 144, h: 108 },
   refinery: { w: 144, h: 120 },
+  powerPlant: { w: 144, h: 112 },
+  guardTower: { w: 144, h: 112 },
+  radar: { w: 144, h: 118 },
 };
 
 const ENEMY_TINT = 0xc94a55;

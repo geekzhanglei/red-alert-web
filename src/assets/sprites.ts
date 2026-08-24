@@ -13,6 +13,26 @@ function svg(w: number, h: number, body: string): string {
   )}`;
 }
 
+/** 新增单位共用 2×2 四向图集，保持与 UnitRenderer 的 128px 帧约定一致。 */
+function unitSheet(body: string): string {
+  const frames = [
+    [0, 0],
+    [128, 0],
+    [0, 128],
+    [128, 128],
+  ];
+  return svg(
+    256,
+    256,
+    frames.map(([x, y]) => `<g transform="translate(${x} ${y})">${body}</g>`).join(''),
+  );
+}
+
+/** 新增建筑使用 128×128 原创等距插图；敌方通过渲染层统一染色。 */
+function buildingSprite(body: string): string {
+  return svg(128, 128, body);
+}
+
 // 地形 64×32（菱形底图）
 function terrain(base: string, pattern: string, detail: string): string {
   return svg(
@@ -134,6 +154,76 @@ export const SPRITES = {
         <circle cx="23" cy="20" r="1.1" fill="#5e5e5e"/>
       </g>`,
     ),
+
+  // ===== 第一批新增单位：反装甲、侦察、攻城、重装 =====
+  rocketTrooper: unitSheet(`
+    <ellipse cx="64" cy="101" rx="25" ry="7" fill="#071017" opacity=".55"/>
+    <path d="M43 65h35l10 30H38z" fill="#364957" stroke="#101820" stroke-width="3"/>
+    <path d="M48 61c0-14 8-22 17-22s17 8 17 22" fill="#4c6a78" stroke="#101820" stroke-width="3"/>
+    <path d="M51 43h13v16H51z" fill="#d5b26a"/>
+    <path d="M79 72l28-20 5 7-28 20z" fill="#ad7e38" stroke="#171d22" stroke-width="3"/>
+    <circle cx="58" cy="74" r="4" fill="#6ec8e8"/><circle cx="72" cy="74" r="4" fill="#6ec8e8"/>
+    <path d="M43 91h35" stroke="#8ca4ae" stroke-width="3" opacity=".7"/>
+  `),
+  scout: unitSheet(`
+    <ellipse cx="64" cy="101" rx="31" ry="7" fill="#071017" opacity=".55"/>
+    <path d="M29 82l18-22h34l28 22-9 17H39z" fill="#456a72" stroke="#101820" stroke-width="4"/>
+    <path d="M48 63l17-11 20 13-7 16H49z" fill="#7eafae" stroke="#17252b" stroke-width="3"/>
+    <path d="M66 57l29-12 3 6-28 14z" fill="#d2a84e" stroke="#171d22" stroke-width="3"/>
+    <circle cx="46" cy="91" r="8" fill="#1b272c" stroke="#879ba2" stroke-width="3"/><circle cx="87" cy="91" r="8" fill="#1b272c" stroke="#879ba2" stroke-width="3"/>
+    <circle cx="46" cy="91" r="3" fill="#69c6e5"/><circle cx="87" cy="91" r="3" fill="#69c6e5"/>
+  `),
+  artillery: unitSheet(`
+    <ellipse cx="64" cy="103" rx="34" ry="7" fill="#071017" opacity=".55"/>
+    <path d="M27 76h72v24H27z" fill="#263841" stroke="#101820" stroke-width="4"/>
+    <path d="M37 68h48l11 12H31z" fill="#59727a" stroke="#101820" stroke-width="4"/>
+    <circle cx="61" cy="71" r="12" fill="#3e5860" stroke="#101820" stroke-width="3"/>
+    <path d="M66 66l49-28 5 9-50 27z" fill="#a2adb0" stroke="#171d22" stroke-width="4"/>
+    <circle cx="40" cy="94" r="7" fill="#18252b" stroke="#879ba2" stroke-width="3"/><circle cx="86" cy="94" r="7" fill="#18252b" stroke="#879ba2" stroke-width="3"/>
+    <path d="M48 82h32" stroke="#d09e4b" stroke-width="4"/>
+  `),
+  heavyTank: unitSheet(`
+    <ellipse cx="64" cy="103" rx="36" ry="7" fill="#071017" opacity=".55"/>
+    <path d="M25 75h78v27H25z" fill="#202d33" stroke="#101820" stroke-width="4"/>
+    <path d="M34 63h60l12 19H22z" fill="#5c7074" stroke="#101820" stroke-width="4"/>
+    <circle cx="65" cy="68" r="17" fill="#6b8586" stroke="#101820" stroke-width="4"/>
+    <path d="M70 62l48-14 3 10-48 15z" fill="#b4bdaf" stroke="#171d22" stroke-width="4"/>
+    <circle cx="39" cy="91" r="6" fill="#111b20" stroke="#a2b0ad" stroke-width="3"/><circle cx="91" cy="91" r="6" fill="#111b20" stroke="#a2b0ad" stroke-width="3"/>
+    <circle cx="65" cy="68" r="5" fill="#6ec8e8"/>
+  `),
+
+  // ===== 第一批新增建筑：能源、防御、侦察 =====
+  powerPlant: () =>
+    buildingSprite(`
+      <ellipse cx="64" cy="101" rx="43" ry="10" fill="#071017" opacity=".55"/>
+      <polygon points="64,18 108,43 64,68 20,43" fill="#29444e" stroke="#101820" stroke-width="3"/>
+      <path d="M28 44h72v40H28z" fill="#3d6266" stroke="#101820" stroke-width="3"/>
+      <path d="M35 45h58v10H35z" fill="#89a4a1" opacity=".55"/>
+      <rect x="43" y="62" width="12" height="22" fill="#18252a"/><rect x="73" y="62" width="12" height="22" fill="#18252a"/>
+      <path d="M42 24h11v21H42zM75 24h11v21H75z" fill="#1c2b30" stroke="#101820" stroke-width="3"/>
+      <path d="M43 25h9M76 25h9" stroke="#f0b454" stroke-width="4"/>
+      <circle cx="49" cy="61" r="3" fill="#64d2ef"/><circle cx="79" cy="61" r="3" fill="#64d2ef"/>
+    `),
+  guardTower: () =>
+    buildingSprite(`
+      <ellipse cx="64" cy="101" rx="39" ry="9" fill="#071017" opacity=".55"/>
+      <polygon points="64,20 104,43 64,66 24,43" fill="#334954" stroke="#101820" stroke-width="3"/>
+      <path d="M41 49h46v36H41z" fill="#536d70" stroke="#101820" stroke-width="3"/>
+      <path d="M47 49h34l-8-19H55z" fill="#718987" stroke="#101820" stroke-width="3"/>
+      <circle cx="64" cy="43" r="10" fill="#24363d" stroke="#101820" stroke-width="3"/>
+      <path d="M70 40l40-18 4 8-40 19z" fill="#c4a15a" stroke="#101820" stroke-width="3"/>
+      <rect x="58" y="68" width="12" height="17" fill="#18252a"/><circle cx="53" cy="61" r="3" fill="#64d2ef"/><circle cx="75" cy="61" r="3" fill="#64d2ef"/>
+    `),
+  radar: () =>
+    buildingSprite(`
+      <ellipse cx="64" cy="101" rx="41" ry="9" fill="#071017" opacity=".55"/>
+      <polygon points="64,21 106,44 64,67 22,44" fill="#293c49" stroke="#101820" stroke-width="3"/>
+      <path d="M34 46h60v37H34z" fill="#405e67" stroke="#101820" stroke-width="3"/>
+      <path d="M45 47h38l-7 26H52z" fill="#243840" stroke="#101820" stroke-width="3"/>
+      <path d="M64 47V18" stroke="#b9c5c4" stroke-width="3"/><path d="M64 25l27-12" stroke="#b9c5c4" stroke-width="4"/>
+      <path d="M68 22c16 4 23 11 28 23" stroke="#62c9e2" stroke-width="2" fill="none" opacity=".9"/>
+      <circle cx="64" cy="47" r="5" fill="#65d5ef"/><rect x="57" y="70" width="14" height="13" fill="#18252a"/>
+    `),
 
   // ===== 建筑（96×96, footprint 多格共用）=====
   // base：3×3 footprint
@@ -263,4 +353,3 @@ export const MINIMAP_COLORS: Record<Terrain, number> = {
   rock: 0x7d7d80,
   ore: 0x9a8b3f,
 };
-
