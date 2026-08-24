@@ -3,10 +3,10 @@ import { Difficulty } from '../game/state/GameState';
 const STORAGE_KEY = 'raw.difficulty';
 const URL_PARAM = 'd';
 
-const DIFFICULTY_META: Record<Difficulty, { label: string; hint: string }> = {
-  easy: { label: '简单', hint: '玩家 $8000 · AI 出兵更慢更迟钝' },
-  normal: { label: '普通', hint: '玩家 $5000 · AI 节奏均衡' },
-  hard: { label: '困难', hint: '玩家 $4000 · AI 频繁出击' },
+const DIFFICULTY_META: Record<Difficulty, { code: string; label: string; hint: string; threat: string }> = {
+  easy: { code: '01', label: '新兵演习', hint: '初始资金 $8000 · 敌军反应较慢', threat: '低威胁' },
+  normal: { code: '02', label: '前线冲突', hint: '初始资金 $5000 · 标准作战节奏', threat: '标准' },
+  hard: { code: '03', label: '钢铁风暴', hint: '初始资金 $4000 · 敌军频繁出击', threat: '高威胁' },
 };
 
 function readSaved(): Difficulty | null {
@@ -35,21 +35,61 @@ function remember(d: Difficulty): void {
 
 /** 启动遮罩：玩家先选难度再 boot。回调 onPick 在用户点按钮后触发。 */
 export function mountStartMenu(onPick: (d: Difficulty) => void): void {
-  // 优先级：URL > localStorage > 默认 normal
   const preset = fromUrl() ?? readSaved() ?? 'normal';
 
   const wrap = document.createElement('div');
   wrap.id = 'start-menu';
-  wrap.style.cssText = [
-    'position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px',
-    'background:radial-gradient(circle at 50% 40%, #18241d 0%, #08090a 100%)',
-    'color:#e8edf2;font-family:system-ui,-apple-system,sans-serif;z-index:900',
-  ].join(';');
   wrap.innerHTML = `
-    <h1 style="font-size:48px;margin:0;letter-spacing:.05em">红警 Web</h1>
-    <p style="font-size:14px;margin:0;color:#a0b0a6;letter-spacing:.08em">原创 RTS 原型 · 选择难度开始</p>
-    <div id="start-buttons" style="display:flex;gap:14px;margin-top:8px"></div>
-    <p style="font-size:11px;margin:18px 0 0;color:#6b7c72">操作：左键选中/框选 · 右键移动/攻击 · H 回主视图 · 空格暂停 · Shift+1/2/3 调速 · Ctrl+1~9 编队 · 1~9 复读</p>
+    <div class="start-backdrop" aria-hidden="true">
+      <span class="scan-line"></span>
+      <span class="radar-ring radar-ring-a"></span>
+      <span class="radar-ring radar-ring-b"></span>
+    </div>
+    <section class="command-console" aria-labelledby="game-title">
+      <header class="command-header">
+        <span class="command-emblem" aria-hidden="true"><i></i></span>
+        <div class="command-brand">
+          <p>FIELD COMMAND NETWORK // 07</p>
+          <h1 id="game-title">铁幕前线</h1>
+        </div>
+        <div class="system-state" aria-label="系统在线"><span></span> 战区链路正常</div>
+      </header>
+
+      <div class="command-body">
+        <nav class="campaign-nav" aria-label="游戏模式">
+          <p class="panel-label">作战档案</p>
+          <button class="campaign-tab is-active" type="button"><span>01</span><strong>遭遇战</strong><small>SKIRMISH</small></button>
+          <button class="campaign-tab" type="button" disabled><span>02</span><strong>战役任务</strong><small>COMING SOON</small></button>
+          <button class="campaign-tab" type="button" disabled><span>03</span><strong>网络对战</strong><small>OFFLINE</small></button>
+          <div class="commander-card">
+            <span class="commander-avatar" aria-hidden="true"></span>
+            <div><small>指挥官</small><strong>PLAYER 01</strong></div>
+          </div>
+        </nav>
+
+        <div class="mission-panel">
+          <div class="mission-heading">
+            <div>
+              <p class="panel-label">任务配置 / MISSION SETUP</p>
+              <h2>选择交战强度</h2>
+              <p>侦察卫星已锁定目标区域。选择难度后立即部署基地车。</p>
+            </div>
+            <div class="mission-code" aria-hidden="true">RA<br /><b>26</b></div>
+          </div>
+          <div id="start-buttons" class="difficulty-grid"></div>
+          <div class="battle-briefing">
+            <span><small>区域</small><strong>北境矿区 04</strong></span>
+            <span><small>任务</small><strong>摧毁敌方基地</strong></span>
+            <span><small>环境</small><strong>能见度有限</strong></span>
+          </div>
+        </div>
+      </div>
+
+      <footer class="command-footer">
+        <p><kbd>左键</kbd> 选择 / 框选　<kbd>右键</kbd> 移动 / 攻击　<kbd>H</kbd> 回主视图　<kbd>空格</kbd> 暂停</p>
+        <span>ORIGINAL BROWSER RTS PROTOTYPE</span>
+      </footer>
+    </section>
   `;
   document.body.appendChild(wrap);
 
@@ -59,16 +99,25 @@ export function mountStartMenu(onPick: (d: Difficulty) => void): void {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.dataset.difficulty = d;
-    btn.style.cssText = [
-      'padding:14px 22px;font-size:18px;cursor:pointer;min-width:140px;text-align:center',
-      `background:${d === preset ? '#2c4a78' : '#1c2820'};color:#e8edf2`,
-      'border:1px solid #506253;border-radius:6px',
-    ].join(';');
-    btn.innerHTML = `<div style="font-weight:600">${meta.label}</div><div style="font-size:11px;color:#a0b0a6;margin-top:4px">${meta.hint}</div>`;
+    btn.className = `difficulty-card${d === preset ? ' is-selected' : ''}`;
+    btn.setAttribute('aria-pressed', d === preset ? 'true' : 'false');
+    btn.innerHTML = `
+      <span class="difficulty-code">${meta.code}</span>
+      <span class="difficulty-copy"><strong>${meta.label}</strong><small>${meta.hint}</small></span>
+      <span class="difficulty-threat">${meta.threat}</span>
+      <span class="difficulty-launch">部署 <b aria-hidden="true">›</b></span>
+    `;
+    btn.addEventListener('mouseenter', () => {
+      btnWrap.querySelectorAll('.difficulty-card').forEach((item) => item.classList.remove('is-preview'));
+      btn.classList.add('is-preview');
+    });
     btn.addEventListener('click', () => {
       remember(d);
-      wrap.remove();
-      onPick(d);
+      wrap.classList.add('is-launching');
+      window.setTimeout(() => {
+        wrap.remove();
+        onPick(d);
+      }, 180);
     });
     btnWrap.appendChild(btn);
   });

@@ -116,10 +116,6 @@ export class GameScene extends Phaser.Scene {
     if (this.speedOverlayEl) return;
     this.speedOverlayEl = document.createElement('div');
     this.speedOverlayEl.id = 'speed-overlay';
-    this.speedOverlayEl.style.cssText =
-      'position:fixed;left:50%;top:35%;transform:translate(-50%,-50%);font:600 64px/1 system-ui;color:#ffd24a;' +
-      'text-shadow:0 2px 12px rgba(0,0,0,.8);background:rgba(10,16,12,.55);border:1px solid #506253;' +
-      'border-radius:8px;padding:18px 32px;pointer-events:none;opacity:0;transition:opacity .15s;z-index:150';
     document.body.appendChild(this.speedOverlayEl);
   }
 
@@ -131,12 +127,12 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     if (this.loop.paused) {
-      this.speedOverlayEl.textContent = 'PAUSED';
-      this.speedOverlayEl.style.color = '#ffd24a';
+      this.speedOverlayEl.textContent = '战术暂停';
+      this.speedOverlayEl.dataset.mode = 'paused';
       this.speedOverlayEl.style.opacity = '1';
     } else if (this.loop.timeScale > 1) {
       this.speedOverlayEl.textContent = `${this.loop.timeScale}×`;
-      this.speedOverlayEl.style.color = '#a8e0a8';
+      this.speedOverlayEl.dataset.mode = 'speed';
       this.speedOverlayEl.style.opacity = '1';
     } else {
       this.speedOverlayEl.style.opacity = '0';

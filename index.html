@@ -24,18 +24,20 @@
     <main id="app" aria-label="Red Alert Web 游戏">
       <div id="game-root"></div>
       <aside id="hud" aria-label="游戏状态">
-        <span>资金 <span id="money">$0</span></span>
-        <span id="selection-info">选择：无</span>
-        <span id="tile-info">鼠标：—</span>
+        <span class="hud-brand" aria-hidden="true">FCN</span>
+        <span class="hud-stat"><small>资金</small><strong id="money">$0</strong></span>
+        <span class="hud-stat hud-selection"><small>战术选择</small><strong id="selection-info">无</strong></span>
+        <span class="hud-stat hud-coordinate"><small>坐标</small><strong id="tile-info">—</strong></span>
         <span id="view-actions">
-          <button id="home-view" type="button" title="恢复开局的地图位置与缩放">重置视角 H</button>
-          <button id="back-to-menu" type="button" title="结束当前试玩并返回难度选择">返回菜单</button>
+          <button id="home-view" type="button" title="恢复开局的地图位置与缩放"><kbd>H</kbd> 主视图</button>
+          <button id="back-to-menu" type="button" title="结束当前试玩并返回难度选择">退出战局</button>
         </span>
       </aside>
       <aside id="build-bar" aria-label="建造栏">
-        <button type="button" data-building="refinery">矿场 $2000</button>
-        <button type="button" data-building="barracks">兵营 $500</button>
-        <button type="button" data-building="factory">战车工厂 $2000</button>
+        <header><span>基地建造</span><small>STRUCTURES</small></header>
+        <button type="button" data-building="refinery"><span class="build-icon build-icon-refinery" aria-hidden="true"></span><span><strong>矿石精炼厂</strong><small>经济设施</small></span><b>$2000</b></button>
+        <button type="button" data-building="barracks"><span class="build-icon build-icon-barracks" aria-hidden="true"></span><span><strong>步兵营</strong><small>步兵生产</small></span><b>$500</b></button>
+        <button type="button" data-building="factory"><span class="build-icon build-icon-factory" aria-hidden="true"></span><span><strong>战车工厂</strong><small>载具生产</small></span><b>$2000</b></button>
         <p id="build-hint">点击按钮开始放置 · 左键确认 · 右键 / Esc 取消</p>
       </aside>
       <aside id="prod-panel" aria-label="生产面板"></aside>
