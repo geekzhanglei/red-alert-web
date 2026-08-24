@@ -62,6 +62,7 @@ export class GameScene extends Phaser.Scene {
     // 等纹理全部加载完成后再建地形贴图层（否则 first frame 走兜底）
     this.load.once('complete', () => {
       this.mapRenderer.init(this, this.sim.state.map);
+      window.dispatchEvent(new Event('raw:scene-ready'));
     });
     this.load.start();
     this.buildings = new BuildingRenderer(this);

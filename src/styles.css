@@ -76,6 +76,19 @@ button:focus-visible {
   transform: scale(1.01);
 }
 
+#start-menu.is-deploying .difficulty-card {
+  cursor: wait;
+}
+
+#start-menu.is-deploying .scan-line {
+  animation-duration: 1.2s;
+}
+
+#start-menu.is-deploying .system-state span {
+  background: var(--warning);
+  box-shadow: 0 0 10px var(--warning);
+}
+
 .start-backdrop {
   position: absolute;
   inset: 0;

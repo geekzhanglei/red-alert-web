@@ -34,7 +34,7 @@ function remember(d: Difficulty): void {
 }
 
 /** 启动遮罩：玩家先选难度再 boot。回调 onPick 在用户点按钮后触发。 */
-export function mountStartMenu(onPick: (d: Difficulty) => void): void {
+export function mountStartMenu(onPick: (d: Difficulty) => void | Promise<void>): void {
   const preset = fromUrl() ?? readSaved() ?? 'normal';
 
   const wrap = document.createElement('div');
@@ -111,13 +111,26 @@ export function mountStartMenu(onPick: (d: Difficulty) => void): void {
       btnWrap.querySelectorAll('.difficulty-card').forEach((item) => item.classList.remove('is-preview'));
       btn.classList.add('is-preview');
     });
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
+      if (wrap.classList.contains('is-deploying')) return;
       remember(d);
-      wrap.classList.add('is-launching');
-      window.setTimeout(() => {
-        wrap.remove();
-        onPick(d);
-      }, 180);
+      wrap.classList.add('is-deploying');
+      btnWrap.querySelectorAll<HTMLButtonElement>('.difficulty-card').forEach((item) => (item.disabled = true));
+      const state = wrap.querySelector<HTMLElement>('.system-state');
+      if (state) state.lastChild!.textContent = ' 正在建立战区链路';
+      const launch = btn.querySelector<HTMLElement>('.difficulty-launch');
+      if (launch) launch.textContent = '部署中…';
+      try {
+        await onPick(d);
+        wrap.classList.add('is-launching');
+        window.setTimeout(() => wrap.remove(), 180);
+      } catch (error) {
+        console.error('Failed to boot game runtime', error);
+        wrap.classList.remove('is-deploying');
+        btnWrap.querySelectorAll<HTMLButtonElement>('.difficulty-card').forEach((item) => (item.disabled = false));
+        if (state) state.lastChild!.textContent = ' 部署失败，请重试';
+        if (launch) launch.innerHTML = '重试 <b aria-hidden="true">›</b>';
+      }
     });
     btnWrap.appendChild(btn);
   });
