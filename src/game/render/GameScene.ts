@@ -387,6 +387,16 @@ export class GameScene extends Phaser.Scene {
     const player = this.sim.state.players[PLAYER_ID];
     this.powerEl.textContent = `${player.powerProduced} / ${player.powerConsumed}`;
     this.powerEl.dataset.state = player.powerConsumed > player.powerProduced ? 'short' : 'ok';
+    const gauge = document.getElementById('power-gauge');
+    if (gauge) {
+      const scale = Math.max(100, player.powerProduced, player.powerConsumed);
+      const supply = Math.min(100, (player.powerProduced / scale) * 100);
+      const demand = Math.min(100, (player.powerConsumed / scale) * 100);
+      gauge.style.setProperty('--power-level', `${supply}%`);
+      gauge.style.setProperty('--power-demand', `${demand}%`);
+      gauge.setAttribute('aria-valuenow', String(Math.round(supply)));
+      gauge.setAttribute('aria-valuetext', `发电 ${player.powerProduced}，消耗 ${player.powerConsumed}`);
+    }
   }
 
   /** 经典 RTS 左侧栏：选中实体时固定显示状态、生产页签、队列环形进度和升级卡片。 */

@@ -25,21 +25,15 @@
       <div id="game-root"></div>
       <aside id="left-sidebar" aria-label="战区控制面板">
         <section id="hud" aria-label="游戏状态">
-          <span class="hud-brand" aria-hidden="true"><b>FCN</b><small>TACTICAL</small></span>
-          <span class="hud-stat"><small>资金</small><strong id="money">$0</strong></span>
-          <span class="hud-stat hud-power"><small>电力</small><strong id="power-status">0 / 0</strong></span>
-          <span class="hud-stat hud-selection"><small>战术选择</small><strong id="selection-info">无</strong></span>
-          <span class="hud-stat hud-coordinate"><small>坐标</small><strong id="tile-info">—</strong></span>
-          <span id="view-actions">
-            <button id="home-view" type="button" title="恢复开局的地图位置与缩放"><kbd>H</kbd> 主视图</button>
-            <button id="back-to-menu" type="button" title="结束当前试玩并返回难度选择">退出战局</button>
-          </span>
+          <small>资金 / CREDITS</small><strong id="money">$0</strong>
         </section>
         <section id="radar-panel" aria-label="战区小地图">
-          <header><span>战区雷达</span><small>TACTICAL MAP</small></header>
           <div class="radar-screen"><canvas id="minimap-canvas" aria-label="可点击跳转的战区小地图"></canvas><i class="radar-sweep" aria-hidden="true"></i></div>
-          <footer><span><i></i>雷达在线</span><b>SECTOR 10</b></footer>
         </section>
+        <nav id="view-actions" aria-label="战术操作">
+          <button id="home-view" type="button" title="恢复开局的地图位置与缩放"><kbd>H</kbd> 主视图</button>
+          <button id="back-to-menu" type="button" title="结束当前试玩并返回难度选择">退出战局</button>
+        </nav>
         <nav id="catalog-tabs" aria-label="生产分类">
           <button type="button" class="is-active" data-catalog-tab="structures" title="建筑"><span aria-hidden="true">▰</span><small>建筑</small></button>
           <button type="button" data-catalog-tab="defense" title="防御"><span aria-hidden="true">◆</span><small>防御</small></button>
@@ -47,6 +41,10 @@
           <button type="button" data-catalog-tab="vehicles" title="载具"><span aria-hidden="true">▣</span><small>载具</small></button>
         </nav>
         <aside id="build-bar" aria-label="建造栏">
+          <div id="power-gauge" role="meter" aria-label="基地电力" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span class="power-track" aria-hidden="true"><i class="power-mask"></i><i class="power-supply"></i><i class="power-demand"></i></span>
+            <strong id="power-status">0 / 0</strong>
+          </div>
           <header><span id="catalog-title">基地建造</span><small id="catalog-code">STRUCTURES</small></header>
           <button type="button" data-catalog="structures" data-building="refinery"><span class="build-icon build-icon-refinery" aria-hidden="true"></span><span><strong>矿石精炼厂</strong><small>经济设施</small></span><b>$2000</b></button>
           <button type="button" data-catalog="structures" data-building="barracks"><span class="build-icon build-icon-barracks" aria-hidden="true"></span><span><strong>步兵营</strong><small>步兵生产</small></span><b>$500</b></button>
