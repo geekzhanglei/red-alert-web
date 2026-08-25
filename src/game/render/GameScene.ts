@@ -196,6 +196,7 @@ export class GameScene extends Phaser.Scene {
     // 建筑先画（背景），单位后画（前景角色），与等距遮挡一致
     this.buildings.update(this.sim.state, PLAYER_ID);
     this.units.update(this.sim.state, this.loop.alpha, PLAYER_ID);
+    this.mapRenderer.updateResources(this.sim.state);
     this.mapRenderer.updateFog(this.sim.state, PLAYER_ID);
     this.minimap.update(this.sim.state);
     this.cameraControl.update(delta / 1000, this.scale.width, this.scale.height);
@@ -314,7 +315,7 @@ export class GameScene extends Phaser.Scene {
       .map((unitTypeId) => {
         const def = this.sim.state.defs[unitTypeId];
         const spriteUrl = UNIT_SPRITE_URLS[unitTypeId];
-        return `<button type="button" class="catalog-unit" data-train-global="${unitTypeId}"><span class="catalog-thumb" style="--catalog-image:url('${spriteUrl}')" aria-hidden="true"></span><span class="catalog-item-copy"><strong>${def.name}</strong><small>$${def.cost}</small></span><span class="catalog-progress" data-catalog-progress hidden><i></i><b></b></span></button>`;
+        return `<button type="button" class="catalog-unit" data-train-global="${unitTypeId}"><span class="catalog-thumb" style="--catalog-image:url('${spriteUrl}')" aria-hidden="true"></span><span class="catalog-item-copy"><strong>${def.name}</strong><small>$${def.cost}</small></span><span class="catalog-queue-count" data-catalog-queue-count hidden></span><span class="catalog-progress" data-catalog-progress hidden><i></i><b></b></span></button>`;
       })
       .join('');
   }
@@ -326,28 +327,43 @@ export class GameScene extends Phaser.Scene {
     this.unitCatalogEl.querySelectorAll<HTMLButtonElement>('button[data-train-global]').forEach((button) => {
       const unitTypeId = button.dataset.trainGlobal ?? '';
       const def = this.sim.state.defs[unitTypeId];
-      const producer = this.findProducerFor(unitTypeId);
-      button.disabled = !def || !producer || player.money < def.cost;
+      const producers = this.findProducersFor(unitTypeId);
+      button.disabled = !def || producers.length === 0 || player.money < def.cost;
       const progress = button.querySelector<HTMLElement>('[data-catalog-progress]');
-      if (!progress || !def || !producer) return;
-      const queueIndex = producer.productionQueue.indexOf(unitTypeId);
-      progress.hidden = queueIndex < 0;
-      if (queueIndex < 0) return;
+      const countBadge = button.querySelector<HTMLElement>('[data-catalog-queue-count]');
+      const totalQueued = producers.reduce(
+        (total, producer) => total + producer.productionQueue.filter((queued) => queued === unitTypeId).length,
+        0,
+      );
+      if (countBadge) {
+        countBadge.hidden = totalQueued === 0;
+        countBadge.textContent = `×${totalQueued}`;
+      }
+      if (!progress || !def || producers.length === 0) return;
+      const activeProducer = producers
+        .filter((producer) => producer.productionQueue[0] === unitTypeId)
+        .sort((a, b) => b.productionProgress - a.productionProgress)[0];
+      progress.hidden = totalQueued === 0;
+      if (totalQueued === 0) return;
       const ring = progress.querySelector<HTMLElement>('i');
       const label = progress.querySelector<HTMLElement>('b');
-      if (queueIndex === 0) {
+      if (activeProducer) {
         const ticks = def.buildTicks * (powerShort ? 2 : 1);
-        const pct = Math.min(100, Math.floor((producer.productionProgress / ticks) * 100));
+        const pct = Math.min(100, Math.floor((activeProducer.productionProgress / ticks) * 100));
         ring?.style.setProperty('--progress', `${pct}%`);
         if (label) label.textContent = `${pct}%`;
       } else {
         ring?.style.setProperty('--progress', '0%');
-        if (label) label.textContent = `Q${queueIndex}`;
+        if (label) label.textContent = '待产';
       }
     });
   }
 
   private findProducerFor(unitTypeId: string): EntityState | null {
+    return this.findProducersFor(unitTypeId)[0] ?? null;
+  }
+
+  private findProducersFor(unitTypeId: string): EntityState[] {
     const candidates = this.sim.state.entitiesOrder
       .map((id) => this.sim.state.entities[id])
       .filter((entity): entity is EntityState => {
@@ -356,7 +372,7 @@ export class GameScene extends Phaser.Scene {
         return def.produces.includes(unitTypeId) || entity.producesExtra.includes(unitTypeId);
       });
     candidates.sort((a, b) => a.productionQueue.length - b.productionQueue.length || a.id - b.id);
-    return candidates[0] ?? null;
+    return candidates;
   }
 
   private isBuildingUnlocked(typeId: string): boolean {
@@ -394,6 +410,7 @@ export class GameScene extends Phaser.Scene {
       const demand = Math.min(100, (player.powerConsumed / scale) * 100);
       gauge.style.setProperty('--power-level', `${supply}%`);
       gauge.style.setProperty('--power-demand', `${demand}%`);
+      gauge.dataset.state = player.powerConsumed > player.powerProduced ? 'short' : 'ok';
       gauge.setAttribute('aria-valuenow', String(Math.round(supply)));
       gauge.setAttribute('aria-valuetext', `发电 ${player.powerProduced}，消耗 ${player.powerConsumed}`);
     }

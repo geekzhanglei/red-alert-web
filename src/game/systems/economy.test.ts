@@ -45,6 +45,21 @@ describe('资金接口', () => {
 });
 
 describe('采矿车循环', () => {
+  it('默认战局在玩家矿场附近生成可采集的黄金矿脉', () => {
+    const state = createInitialGameState();
+    const refinery = state.entitiesOrder
+      .map((id) => state.entities[id])
+      .find((entity) => entity.type === 'building' && entity.typeId === 'refinery' && entity.ownerId === 0);
+    expect(refinery).toBeDefined();
+    const nearbyOre = state.map.tiles.filter((tile, index) => {
+      if (tile.terrain !== 'ore' || tile.oreAmount <= 0 || !refinery) return false;
+      const x = index % state.map.width;
+      const y = Math.floor(index / state.map.width);
+      return Math.max(Math.abs(x - refinery.tileX), Math.abs(y - refinery.tileY)) <= 8;
+    });
+    expect(nearbyOre.length).toBeGreaterThanOrEqual(7);
+  });
+
   it('寻矿→挖矿→回矿场卸货→资金增长', () => {
     const game = new Game(createInitialGameState({ testUnits: false }));
     game.state.map = makeMap(14, 10);

@@ -142,6 +142,7 @@ function spawnTestSetup(state: GameState): void {
   const harvSpot = findAdjacentFreeSpot(state.map, refSpot.x, refSpot.y, 2, 2, 26, 23)!;
   // 单位以整数地格中心为出生锚点；避免从建筑出口出生时产生半格偏移。
   spawnUnit(state, 'harvester', 0, harvSpot.x, harvSpot.y);
+  seedStarterOreField(state.map, refSpot.x - 4, refSpot.y + 2);
 
   spawnUnit(state, 'tank', 0, 30, 30);
   spawnUnit(state, 'tank', 0, 32, 30);
@@ -154,6 +155,24 @@ function spawnTestSetup(state: GameState): void {
   spawnUnit(state, 'infantry', 1, 38, 32);
   spawnUnit(state, 'tank', 1, 41, 34);
   spawnUnit(state, 'infantry', 1, 39, 37);
+}
+
+/** 在玩家矿场附近放置一片稳定可见的黄金矿脉，避免随机地图开局只有零散或不可见矿点。 */
+function seedStarterOreField(map: MapState, nearX: number, nearY: number): void {
+  const spot = findBuildableSpot(map, 3, 3, nearX, nearY);
+  if (!spot) return;
+  const offsets = [
+    { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 },
+    { x: 1, y: 2 }, { x: 0, y: 2 }, { x: 2, y: 0 },
+  ];
+  for (const offset of offsets) {
+    const tile = tileAt(map, spot.x + offset.x, spot.y + offset.y);
+    if (!tile || tile.occupiedBy != null) continue;
+    tile.terrain = 'ore';
+    tile.walkable = true;
+    tile.buildable = false;
+    tile.oreAmount = 1000;
+  }
 }
 
 /** 从 near 点向外螺旋找一块 w×h 全 buildable 的区域。 */

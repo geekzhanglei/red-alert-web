@@ -40,6 +40,26 @@ describe('生产与电力', () => {
     expect(enqueueTrain(game.state, base.id, 1, 'tank')).toBe(false); // 异 owner
   });
 
+  it('允许连续排入多个单位，步兵与车辆队列可并行推进', () => {
+    const game = new Game(createInitialGameState({ testUnits: false }));
+    game.state.map = makeFlatMap(24, 24);
+    game.state.players[0].money = 20_000;
+    const barracks = spawnBuilding(game.state, 'barracks', 0, 3, 3);
+    const factory = spawnBuilding(game.state, 'factory', 0, 14, 14);
+
+    expect(enqueueTrain(game.state, barracks.id, 0, 'infantry')).toBe(true);
+    expect(enqueueTrain(game.state, barracks.id, 0, 'infantry')).toBe(true);
+    expect(enqueueTrain(game.state, barracks.id, 0, 'rocketTrooper')).toBe(true);
+    expect(enqueueTrain(game.state, factory.id, 0, 'tank')).toBe(true);
+    expect(enqueueTrain(game.state, factory.id, 0, 'scout')).toBe(true);
+    expect(barracks.productionQueue).toEqual(['infantry', 'infantry', 'rocketTrooper']);
+    expect(factory.productionQueue).toEqual(['tank', 'scout']);
+
+    updateProduction(game.state);
+    expect(barracks.productionProgress).toBe(1);
+    expect(factory.productionProgress).toBe(1);
+  });
+
   it('生产进度到 buildTicks 后在建筑旁 spawn 单位（电力充足时）', () => {
     const game = new Game(createInitialGameState({ testUnits: false }));
     game.state.map = makeFlatMap(20, 20);

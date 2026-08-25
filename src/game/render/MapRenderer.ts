@@ -12,6 +12,8 @@ import { TERRAIN_TEXTURE_KEY } from '../../assets/loadSprites';
  */
 export class MapRenderer {
   private terrainImages: Phaser.GameObjects.Image[] = [];
+  private oreOverlays = new Map<number, Phaser.GameObjects.Image>();
+  private oreDisplayAmounts = new Map<number, number>();
   private fog: Phaser.GameObjects.Graphics;
   private ready = false;
 
@@ -30,13 +32,21 @@ export class MapRenderer {
       for (let x = 0; x < map.width; x++) {
         const idx = y * map.width + x;
         const tile = map.tiles[idx];
-        const key = TERRAIN_TEXTURE_KEY[tile.terrain];
+        // 矿石作为草地之上的独立资源层渲染，才能随采集量逐渐缩小并最终消失。
+        const key = tile.terrain === 'ore' ? TERRAIN_TEXTURE_KEY.grass : TERRAIN_TEXTURE_KEY[tile.terrain];
         const c = gridToScreen(x, y);
         const img = scene.add.image(c.x, c.y, key).setDepth(0);
         img.setOrigin(0.5, 0.5);
         // 所有地形资源统一压到逻辑格尺寸；高分辨率原创位图因此可以直接替换 SVG。
         img.setDisplaySize(TILE_W, TILE_H);
         this.terrainImages.push(img);
+        if (tile.terrain === 'ore' && tile.oreAmount > 0) {
+          const ore = scene.add.image(c.x, c.y - 3, TERRAIN_TEXTURE_KEY.ore).setDepth(1);
+          ore.setOrigin(0.5, 0.56);
+          ore.setDisplaySize(TILE_W * 1.24, TILE_H * 1.38);
+          this.oreOverlays.set(idx, ore);
+          this.oreDisplayAmounts.set(idx, tile.oreAmount);
+        }
       }
     }
     this.ready = true;
@@ -44,6 +54,23 @@ export class MapRenderer {
 
   isReady(): boolean {
     return this.ready;
+  }
+
+  /** 矿车采集会真实改变贴图：储量越少，矿石簇越小、越暗，耗尽后只留下草地。 */
+  updateResources(state: GameState): void {
+    for (const [idx, ore] of this.oreOverlays) {
+      const amount = state.map.tiles[idx]?.oreAmount ?? 0;
+      if (this.oreDisplayAmounts.get(idx) === amount) continue;
+      this.oreDisplayAmounts.set(idx, amount);
+      if (amount <= 0) {
+        ore.setVisible(false);
+        continue;
+      }
+      const ratio = Phaser.Math.Clamp(amount / 1000, 0.18, 1);
+      ore.setVisible(true);
+      ore.setAlpha(0.58 + ratio * 0.42);
+      ore.setDisplaySize(TILE_W * (0.9 + ratio * 0.34), TILE_H * (0.96 + ratio * 0.42));
+    }
   }
 
   /** 每帧更新雾遮罩：可见格透明，已探索半透明黑，未探索全黑。 */
