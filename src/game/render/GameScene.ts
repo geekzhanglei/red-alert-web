@@ -5,7 +5,7 @@ import { createInitialGameState, PLAYER_ID, Difficulty } from '../state/GameStat
 import type { GameState } from '../state/GameState';
 import type { EntityState } from '../state/entities';
 import { Terrain, tileAt } from '../state/map';
-import { screenToGrid } from './isometric';
+import { gridToScreen, screenToGrid } from './isometric';
 import { MapRenderer, mapWorldBounds } from './MapRenderer';
 import { UnitRenderer } from './UnitRenderer';
 import { BuildingRenderer } from './BuildingRenderer';
@@ -17,13 +17,27 @@ import { upgradeCost } from '../state/commands';
 import { canAfford } from '../state/players';
 import { Minimap } from './Minimap';
 import { ResultOverlay } from '../../ui/ResultOverlay';
-import { loadAllSprites } from '../../assets/loadSprites';
+import { BUILDING_SPRITE_URLS, loadAllSprites, UNIT_SPRITE_URLS } from '../../assets/loadSprites';
 
 const TERRAIN_NAMES: Record<Terrain, string> = {
   grass: '草地',
   water: '水域',
   rock: '岩石',
   ore: '矿石',
+};
+
+type CatalogTab = 'structures' | 'defense' | 'infantry' | 'vehicles';
+
+const CATALOG_LABELS: Record<CatalogTab, { title: string; code: string }> = {
+  structures: { title: '基地建造', code: 'STRUCTURES' },
+  defense: { title: '防御设施', code: 'DEFENSE' },
+  infantry: { title: '步兵单位', code: 'INFANTRY' },
+  vehicles: { title: '载具单位', code: 'VEHICLES' },
+};
+
+const UNIT_CATALOG: Record<'infantry' | 'vehicles', string[]> = {
+  infantry: ['infantry', 'rocketTrooper'],
+  vehicles: ['harvester', 'scout', 'tank', 'artillery', 'heavyTank'],
 };
 
 /**
@@ -47,9 +61,15 @@ export class GameScene extends Phaser.Scene {
   private prodPanelEl: HTMLElement | null = null;
   private speedOverlayEl: HTMLElement | null = null;
   private buildButtons: HTMLButtonElement[] = [];
+  private catalogTabs: HTMLButtonElement[] = [];
+  private unitCatalogEl: HTMLElement | null = null;
+  private catalogEmptyEl: HTMLElement | null = null;
+  private catalogTitleEl: HTMLElement | null = null;
+  private catalogCodeEl: HTMLElement | null = null;
+  private activeCatalogTab: CatalogTab = 'structures';
+  private catalogStructureKey = '';
   private resultOverlay = new ResultOverlay();
   private prodPanelStructureKey = '';
-  private activeProductionTab = '';
 
   constructor() {
     super('game');
@@ -82,22 +102,28 @@ export class GameScene extends Phaser.Scene {
 
     const cam = this.cameras.main;
     const bounds = mapWorldBounds(this.sim.state.map);
+    const commandCenter = this.sim.state.entitiesOrder
+      .map((id) => this.sim.state.entities[id])
+      .find((entity) => entity?.type === 'building' && entity.ownerId === PLAYER_ID && entity.typeId === 'base');
+    const home = commandCenter
+      ? gridToScreen(commandCenter.x, commandCenter.y)
+      : { x: bounds.centerX, y: bounds.centerY };
     cam.setBounds(bounds.x, bounds.y, bounds.width, bounds.height);
-    cam.centerOn(bounds.centerX, bounds.centerY);
+    cam.centerOn(home.x, home.y);
     cam.setBackgroundColor('#101511');
 
     this.cameraControl = new CameraController(this, cam, {
       leftButtonPan: false,
       // CameraController 接收地图世界像素，不是 0~63 的逻辑格坐标。
-      homeView: { x: bounds.centerX, y: bounds.centerY, zoom: 1 },
+      homeView: { x: home.x, y: home.y, zoom: 1 },
     });
     new SelectionController(this, this.sim, cam, {
-      isPointerBlocked: (x, y) => this.placement.isActive() || this.minimap.containsScreenPoint(x, y),
+      isPointerBlocked: () => this.placement.isActive(),
     });
     // 选择控制器先注册 DOM listener：放置模式下它会先判断 blocked 并退出，
     // 随后的放置 listener 再落建筑，避免同一次点击又选中地图实体。
     this.placement = new BuildingPlacementController(this, this.sim, cam);
-    this.placement.onCancel = () => this.refreshBuildButtons();
+    this.placement.onCancel = () => this.refreshCatalog(true);
     new SquadController(this, this.sim);
 
     this.tileInfoEl = document.getElementById('tile-info');
@@ -108,6 +134,7 @@ export class GameScene extends Phaser.Scene {
     this.prodPanelEl?.addEventListener('click', (event) => this.handleProductionClick(event));
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.updateTileInfo(p));
     this.wireBuildBar();
+    this.wireCatalog();
     this.wireViewActions();
     this.wireKeyboard();
   }
@@ -177,7 +204,7 @@ export class GameScene extends Phaser.Scene {
     this.updateMoney();
     this.updatePower();
     this.updateSelectionPanel();
-    this.refreshBuildButtons();
+    this.refreshCatalog();
     this.updateSpeedOverlay();
     this.resultOverlay.update(this.sim.state);
   }
@@ -197,8 +224,43 @@ export class GameScene extends Phaser.Scene {
         btn.disabled = true;
         continue;
       }
+      const icon = btn.querySelector<HTMLElement>('.build-icon');
+      const iconUrl = BUILDING_SPRITE_URLS[defId];
+      if (icon && iconUrl) {
+        icon.classList.add('has-sprite');
+        icon.style.backgroundImage = `url("${iconUrl}")`;
+      }
       btn.addEventListener('click', () => this.placement.select(def));
     }
+  }
+
+  private wireCatalog(): void {
+    this.catalogTabs = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-catalog-tab]'));
+    this.unitCatalogEl = document.getElementById('unit-catalog');
+    this.catalogEmptyEl = document.getElementById('catalog-empty');
+    this.catalogTitleEl = document.getElementById('catalog-title');
+    this.catalogCodeEl = document.getElementById('catalog-code');
+    for (const tab of this.catalogTabs) {
+      tab.addEventListener('click', () => {
+        this.activeCatalogTab = (tab.dataset.catalogTab as CatalogTab | undefined) ?? 'structures';
+        this.refreshCatalog(true);
+      });
+    }
+    this.unitCatalogEl?.addEventListener('click', (event) => {
+      const target = event.target as HTMLElement;
+      const button = target.closest<HTMLButtonElement>('button[data-train-global]');
+      const unitTypeId = button?.dataset.trainGlobal;
+      if (!button || !unitTypeId || button.disabled) return;
+      const producer = this.findProducerFor(unitTypeId);
+      if (!producer) return;
+      this.sim.state.pendingCommands.push({
+        type: 'train',
+        playerId: PLAYER_ID,
+        buildingId: producer.id,
+        unitTypeId,
+      });
+    });
+    this.refreshCatalog(true);
   }
 
   /** 资金变化实时刷新；按钮 affordability / active 状态同步。 */
@@ -208,10 +270,111 @@ export class GameScene extends Phaser.Scene {
       if (!defId) continue;
       const def = this.sim.state.buildingDefs[defId];
       if (!def) continue;
+      const category = btn.dataset.catalog as CatalogTab | undefined;
+      const visible = category === this.activeCatalogTab && this.isBuildingUnlocked(defId);
+      btn.hidden = !visible;
       const affordable = canAfford(this.sim.state, PLAYER_ID, def.cost);
       btn.disabled = !affordable;
       btn.classList.toggle('active', this.placement.isActive() && this.placement.selectedId() === def.id);
     }
+  }
+
+  private refreshCatalog(force = false): void {
+    const state = this.sim.state;
+    const ownedTech = state.entitiesOrder
+      .map((id) => state.entities[id])
+      .filter((e): e is EntityState => Boolean(e) && e.type === 'building' && e.ownerId === PLAYER_ID)
+      .map((e) => `${e.id}:${e.typeId}:${e.upgraded}:${e.producesExtra.join(',')}:${e.productionQueue.join(',')}`)
+      .join('|');
+    const structureKey = `${this.activeCatalogTab}|${ownedTech}`;
+    const labels = CATALOG_LABELS[this.activeCatalogTab];
+    if (this.catalogTitleEl) this.catalogTitleEl.textContent = labels.title;
+    if (this.catalogCodeEl) this.catalogCodeEl.textContent = labels.code;
+    this.catalogTabs.forEach((tab) => tab.classList.toggle('is-active', tab.dataset.catalogTab === this.activeCatalogTab));
+    this.refreshBuildButtons();
+
+    if ((force || structureKey !== this.catalogStructureKey) && this.unitCatalogEl) {
+      this.unitCatalogEl.innerHTML = this.renderUnitCatalog();
+      this.catalogStructureKey = structureKey;
+    }
+    this.refreshUnitCatalogProgress();
+    const visibleBuildings = this.buildButtons.filter((btn) => !btn.hidden).length;
+    const visibleUnits = this.unitCatalogEl?.querySelectorAll('button[data-train-global]').length ?? 0;
+    if (this.catalogEmptyEl) this.catalogEmptyEl.hidden = visibleBuildings + visibleUnits > 0;
+    const hint = document.getElementById('build-hint');
+    if (hint) hint.textContent = this.activeCatalogTab === 'structures' || this.activeCatalogTab === 'defense'
+      ? '选择图标开始放置 · 左键确认 · 右键 / Esc 取消'
+      : '选择已解锁单位加入生产队列';
+  }
+
+  private renderUnitCatalog(): string {
+    if (this.activeCatalogTab !== 'infantry' && this.activeCatalogTab !== 'vehicles') return '';
+    return UNIT_CATALOG[this.activeCatalogTab]
+      .filter((unitTypeId) => this.findProducerFor(unitTypeId))
+      .map((unitTypeId) => {
+        const def = this.sim.state.defs[unitTypeId];
+        const spriteUrl = UNIT_SPRITE_URLS[unitTypeId];
+        return `<button type="button" class="catalog-unit" data-train-global="${unitTypeId}"><span class="catalog-thumb" style="--catalog-image:url('${spriteUrl}')" aria-hidden="true"></span><span class="catalog-item-copy"><strong>${def.name}</strong><small>$${def.cost}</small></span><span class="catalog-progress" data-catalog-progress hidden><i></i><b></b></span></button>`;
+      })
+      .join('');
+  }
+
+  private refreshUnitCatalogProgress(): void {
+    if (!this.unitCatalogEl) return;
+    const player = this.sim.state.players[PLAYER_ID];
+    const powerShort = player.powerConsumed > player.powerProduced;
+    this.unitCatalogEl.querySelectorAll<HTMLButtonElement>('button[data-train-global]').forEach((button) => {
+      const unitTypeId = button.dataset.trainGlobal ?? '';
+      const def = this.sim.state.defs[unitTypeId];
+      const producer = this.findProducerFor(unitTypeId);
+      button.disabled = !def || !producer || player.money < def.cost;
+      const progress = button.querySelector<HTMLElement>('[data-catalog-progress]');
+      if (!progress || !def || !producer) return;
+      const queueIndex = producer.productionQueue.indexOf(unitTypeId);
+      progress.hidden = queueIndex < 0;
+      if (queueIndex < 0) return;
+      const ring = progress.querySelector<HTMLElement>('i');
+      const label = progress.querySelector<HTMLElement>('b');
+      if (queueIndex === 0) {
+        const ticks = def.buildTicks * (powerShort ? 2 : 1);
+        const pct = Math.min(100, Math.floor((producer.productionProgress / ticks) * 100));
+        ring?.style.setProperty('--progress', `${pct}%`);
+        if (label) label.textContent = `${pct}%`;
+      } else {
+        ring?.style.setProperty('--progress', '0%');
+        if (label) label.textContent = `Q${queueIndex}`;
+      }
+    });
+  }
+
+  private findProducerFor(unitTypeId: string): EntityState | null {
+    const candidates = this.sim.state.entitiesOrder
+      .map((id) => this.sim.state.entities[id])
+      .filter((entity): entity is EntityState => {
+        if (!entity || entity.type !== 'building' || entity.ownerId !== PLAYER_ID) return false;
+        const def = this.sim.state.buildingDefs[entity.typeId];
+        return def.produces.includes(unitTypeId) || entity.producesExtra.includes(unitTypeId);
+      });
+    candidates.sort((a, b) => a.productionQueue.length - b.productionQueue.length || a.id - b.id);
+    return candidates[0] ?? null;
+  }
+
+  private isBuildingUnlocked(typeId: string): boolean {
+    const owned = new Set(
+      this.sim.state.entitiesOrder
+        .map((id) => this.sim.state.entities[id])
+        .filter((entity) => entity?.type === 'building' && entity.ownerId === PLAYER_ID)
+        .map((entity) => entity.typeId),
+    );
+    const requirements: Record<string, string[]> = {
+      refinery: ['base'],
+      powerPlant: ['base'],
+      barracks: ['powerPlant'],
+      factory: ['refinery'],
+      guardTower: ['barracks'],
+      radar: ['factory'],
+    };
+    return (requirements[typeId] ?? []).every((required) => owned.has(required));
   }
 
   private updateMoney(): void {
@@ -237,30 +400,26 @@ export class GameScene extends Phaser.Scene {
     if (items.length === 0) {
       this.prodPanelEl.innerHTML = '';
       this.prodPanelStructureKey = '';
-      this.activeProductionTab = '';
       this.prodPanelEl.style.display = 'none';
       return;
     }
     this.prodPanelEl.style.display = '';
 
-    // 进度不参与结构 key，避免每个 tick 重建 DOM 导致页签闪烁；进度由 refreshProductionPanel 更新。
+    // 选择状态只在内容变化时重建，生产目录由固定侧栏独立维护。
     const structureKey = `${sel.join(',')}|${player.money}|${player.powerProduced}|${player.powerConsumed}|${
-      items.map((e) => `${e.id}:${e.type}:${e.typeId}:${Math.ceil(e.hp)}:${e.upgraded}:${e.type === 'building' ? e.productionQueue.join(',') : ''}`).join(';')
+      items.map((e) => `${e.id}:${e.type}:${e.typeId}:${Math.ceil(e.hp)}:${e.upgraded}`).join(';')
     }`;
     if (structureKey !== this.prodPanelStructureKey) {
-      this.prodPanelEl.innerHTML = this.renderSelectionPanel(state, items, player);
+      this.prodPanelEl.innerHTML = this.renderSelectionPanel(state, items);
       this.prodPanelStructureKey = structureKey;
     }
 
-    const sample = items[0];
-    const powerShort = player.powerConsumed > player.powerProduced;
-    this.refreshProductionPanel(state, sample, player, powerShort);
     this.prodPanelEl.querySelectorAll<HTMLButtonElement>('button[data-upgrade]').forEach((btn) => {
       btn.disabled = player.money < Number(btn.dataset.cost ?? '0');
     });
   }
 
-  private renderSelectionPanel(state: GameState, items: EntityState[], player: GameState['players'][number]): string {
+  private renderSelectionPanel(state: GameState, items: EntityState[]): string {
     const sample = items[0];
     const friendly = sample.ownerId === PLAYER_ID;
     const def = sample.type === 'unit' ? state.defs[sample.typeId] : state.buildingDefs[sample.typeId];
@@ -287,21 +446,6 @@ export class GameScene extends Phaser.Scene {
     }
     html += `</div>`;
 
-    if (sample.type === 'building' && items.length === 1 && friendly) {
-      const buildingDef = state.buildingDefs[sample.typeId];
-      const allProduces = Array.from(new Set([...buildingDef.produces, ...sample.producesExtra]));
-      if (allProduces.length > 0) {
-        if (!allProduces.includes(this.activeProductionTab)) this.activeProductionTab = allProduces[0];
-        html += `<section class="production-section"><div class="section-caption"><span>生产序列</span><small>PRODUCTION</small></div><div class="production-tabs" role="tablist">`;
-        for (const unitId of allProduces) {
-          const unitDef = state.defs[unitId];
-          if (!unitDef) continue;
-          html += `<button type="button" class="production-tab${unitId === this.activeProductionTab ? ' is-active' : ''}" data-prod-tab="${unitId}" role="tab" aria-selected="${unitId === this.activeProductionTab}"><strong>${unitDef.name}</strong><small>$${unitDef.cost}</small></button>`;
-        }
-        html += `</div><div class="production-detail"><div><small>当前页签</small><strong data-prod-active-name></strong></div><button type="button" class="production-start" data-prod-start data-train="${this.activeProductionTab}" data-building="${sample.id}"></button></div><div class="power-line" data-prod-power></div><div data-prod-queue>${this.renderQueueMarkup(state, sample, player)}</div></section>`;
-      }
-    }
-
     if (friendly) {
       const cost = upgradeCost(state, sample);
       if (sample.upgraded) {
@@ -315,85 +459,12 @@ export class GameScene extends Phaser.Scene {
     return `${html}</div>`;
   }
 
-  private renderQueueMarkup(state: GameState, sample: EntityState, player: GameState['players'][number]): string {
-    if (sample.type !== 'building' || sample.productionQueue.length === 0) return '<div class="queue-empty">当前没有生产中的单位</div>';
-    const producing = sample.productionQueue[0];
-    const unitDef = state.defs[producing];
-    if (!unitDef) return '<div class="queue-empty">生产数据不可用</div>';
-    const powerShort = player.powerConsumed > player.powerProduced;
-    const ticks = unitDef.buildTicks * (powerShort ? 2 : 1);
-    const pct = Math.min(100, Math.floor((sample.productionProgress / ticks) * 100));
-    return `<div class="queue-card"><div class="production-ring" data-prod-ring style="--progress:${pct}%"><span data-prod-percent>${pct}%</span></div><div class="queue-copy"><strong>${unitDef.name}</strong><small data-prod-queue-state>生产中</small><div class="queued-list" data-prod-queued>${sample.productionQueue.slice(1).map((q) => `<span>${state.defs[q]?.name ?? q}</span>`).join('')}</div></div></div>`;
-  }
-
-  private refreshProductionPanel(state: GameState, sample: EntityState, player: GameState['players'][number], powerShort: boolean): void {
-    if (!this.prodPanelEl) return;
-    this.syncProductionTabUI(state, player);
-    const powerEl = this.prodPanelEl.querySelector<HTMLElement>('[data-prod-power]');
-    if (powerEl) powerEl.textContent = `电力 ${player.powerProduced} / ${player.powerConsumed}${powerShort ? ' · 缺电：生产速度减半' : ''}`;
-    const queueEl = this.prodPanelEl.querySelector<HTMLElement>('[data-prod-queue]');
-    if (!queueEl || sample.type !== 'building' || sample.productionQueue.length === 0) {
-      if (queueEl) queueEl.innerHTML = '<div class="queue-empty">当前没有生产中的单位</div>';
-      return;
-    }
-    const producing = sample.productionQueue[0];
-    const unitDef = state.defs[producing];
-    if (!unitDef) return;
-    const ticks = unitDef.buildTicks * (powerShort ? 2 : 1);
-    const pct = Math.min(100, Math.floor((sample.productionProgress / ticks) * 100));
-    const ring = queueEl.querySelector<HTMLElement>('[data-prod-ring]');
-    const percent = queueEl.querySelector<HTMLElement>('[data-prod-percent]');
-    const stateText = queueEl.querySelector<HTMLElement>('[data-prod-queue-state]');
-    if (ring) ring.style.setProperty('--progress', `${pct}%`);
-    if (percent) percent.textContent = `${pct}%`;
-    if (stateText) stateText.textContent = `${sample.productionQueue.length > 1 ? `生产中 · 队列 ${sample.productionQueue.length}` : '生产中'} · ${Math.max(0, Math.ceil((ticks - sample.productionProgress) / 20))} 秒`;
-    const queued = queueEl.querySelector<HTMLElement>('[data-prod-queued]');
-    if (queued) queued.innerHTML = sample.productionQueue.slice(1).map((q) => `<span>${state.defs[q]?.name ?? q}</span>`).join('');
-  }
-
-  private syncProductionTabUI(state: GameState, player: GameState['players'][number]): void {
-    if (!this.prodPanelEl) return;
-    const tabs = Array.from(this.prodPanelEl.querySelectorAll<HTMLButtonElement>('[data-prod-tab]'));
-    if (tabs.length === 0) return;
-    if (!tabs.some((tab) => tab.dataset.prodTab === this.activeProductionTab)) this.activeProductionTab = tabs[0].dataset.prodTab ?? '';
-    tabs.forEach((tab) => {
-      const active = tab.dataset.prodTab === this.activeProductionTab;
-      tab.classList.toggle('is-active', active);
-      tab.setAttribute('aria-selected', String(active));
-    });
-    const activeDef = state.defs[this.activeProductionTab];
-    const nameEl = this.prodPanelEl.querySelector<HTMLElement>('[data-prod-active-name]');
-    const start = this.prodPanelEl.querySelector<HTMLButtonElement>('[data-prod-start]');
-    if (activeDef && start) {
-      start.dataset.train = activeDef.id;
-      start.disabled = player.money < activeDef.cost;
-      start.innerHTML = `开始生产 <b>$${activeDef.cost}</b>`;
-    }
-    if (nameEl) nameEl.textContent = activeDef?.name ?? '未选择';
-  }
-
   private activityLabel(a: string): string {
     return a === 'idle' ? '待机' : a === 'moving' ? '移动中' : a === 'attacking' ? '战斗中' : a;
   }
 
   private handleProductionClick(event: Event): void {
     const target = event.target as HTMLElement;
-    const tab = target.closest<HTMLButtonElement>('button[data-prod-tab]');
-    if (tab) {
-      this.activeProductionTab = tab.dataset.prodTab ?? '';
-      this.syncProductionTabUI(this.sim.state, this.sim.state.players[PLAYER_ID]);
-      return;
-    }
-    const trainBtn = target.closest<HTMLButtonElement>('button[data-train]');
-    if (trainBtn) {
-      this.sim.state.pendingCommands.push({
-        type: 'train',
-        playerId: PLAYER_ID,
-        buildingId: Number(trainBtn.dataset.building),
-        unitTypeId: trainBtn.dataset.train ?? '',
-      });
-      return;
-    }
     const upBtn = target.closest<HTMLButtonElement>('button[data-upgrade]');
     if (upBtn) {
       this.sim.state.pendingCommands.push({

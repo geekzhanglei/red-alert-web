@@ -35,14 +35,27 @@
             <button id="back-to-menu" type="button" title="结束当前试玩并返回难度选择">退出战局</button>
           </span>
         </section>
+        <section id="radar-panel" aria-label="战区小地图">
+          <header><span>战区雷达</span><small>TACTICAL MAP</small></header>
+          <div class="radar-screen"><canvas id="minimap-canvas" aria-label="可点击跳转的战区小地图"></canvas><i class="radar-sweep" aria-hidden="true"></i></div>
+          <footer><span><i></i>雷达在线</span><b>SECTOR 10</b></footer>
+        </section>
+        <nav id="catalog-tabs" aria-label="生产分类">
+          <button type="button" class="is-active" data-catalog-tab="structures" title="建筑"><span aria-hidden="true">▰</span><small>建筑</small></button>
+          <button type="button" data-catalog-tab="defense" title="防御"><span aria-hidden="true">◆</span><small>防御</small></button>
+          <button type="button" data-catalog-tab="infantry" title="步兵"><span aria-hidden="true">♟</span><small>步兵</small></button>
+          <button type="button" data-catalog-tab="vehicles" title="载具"><span aria-hidden="true">▣</span><small>载具</small></button>
+        </nav>
         <aside id="build-bar" aria-label="建造栏">
-          <header><span>基地建造</span><small>STRUCTURES</small></header>
-          <button type="button" data-building="refinery"><span class="build-icon build-icon-refinery" aria-hidden="true"></span><span><strong>矿石精炼厂</strong><small>经济设施</small></span><b>$2000</b></button>
-          <button type="button" data-building="barracks"><span class="build-icon build-icon-barracks" aria-hidden="true"></span><span><strong>步兵营</strong><small>步兵生产</small></span><b>$500</b></button>
-          <button type="button" data-building="factory"><span class="build-icon build-icon-factory" aria-hidden="true"></span><span><strong>战车工厂</strong><small>载具生产</small></span><b>$2000</b></button>
-          <button type="button" data-building="powerPlant"><span class="build-icon build-icon-power" aria-hidden="true"></span><span><strong>发电厂</strong><small>电力 +100</small></span><b>$800</b></button>
-          <button type="button" data-building="guardTower"><span class="build-icon build-icon-tower" aria-hidden="true"></span><span><strong>警戒塔</strong><small>自动防御</small></span><b>$700</b></button>
-          <button type="button" data-building="radar"><span class="build-icon build-icon-radar" aria-hidden="true"></span><span><strong>雷达站</strong><small>扩大视野</small></span><b>$1200</b></button>
+          <header><span id="catalog-title">基地建造</span><small id="catalog-code">STRUCTURES</small></header>
+          <button type="button" data-catalog="structures" data-building="refinery"><span class="build-icon build-icon-refinery" aria-hidden="true"></span><span><strong>矿石精炼厂</strong><small>经济设施</small></span><b>$2000</b></button>
+          <button type="button" data-catalog="structures" data-building="barracks"><span class="build-icon build-icon-barracks" aria-hidden="true"></span><span><strong>步兵营</strong><small>步兵生产</small></span><b>$500</b></button>
+          <button type="button" data-catalog="structures" data-building="factory"><span class="build-icon build-icon-factory" aria-hidden="true"></span><span><strong>战车工厂</strong><small>载具生产</small></span><b>$2000</b></button>
+          <button type="button" data-catalog="structures" data-building="powerPlant"><span class="build-icon build-icon-power" aria-hidden="true"></span><span><strong>发电厂</strong><small>电力 +100</small></span><b>$800</b></button>
+          <button type="button" data-catalog="defense" data-building="guardTower"><span class="build-icon build-icon-tower" aria-hidden="true"></span><span><strong>警戒塔</strong><small>自动防御</small></span><b>$700</b></button>
+          <button type="button" data-catalog="structures" data-building="radar"><span class="build-icon build-icon-radar" aria-hidden="true"></span><span><strong>雷达站</strong><small>扩大视野</small></span><b>$1200</b></button>
+          <div id="unit-catalog" aria-live="polite"></div>
+          <p id="catalog-empty">该分类尚未解锁任何项目</p>
           <p id="build-hint">点击按钮开始放置 · 左键确认 · 右键 / Esc 取消</p>
         </aside>
         <aside id="prod-panel" aria-label="生产与升级面板"></aside>

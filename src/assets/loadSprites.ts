@@ -18,6 +18,27 @@ import powerPlantUrl from './optimized/building-power-plant.webp';
 import guardTowerUrl from './optimized/building-guard-tower.webp';
 import radarUrl from './optimized/building-radar.webp';
 
+/** DOM 侧栏缩略图复用和 Phaser 相同的原创资源，避免维护第二套图标。 */
+export const UNIT_SPRITE_URLS: Record<string, string> = {
+  infantry: infantryUrl,
+  tank: tankUrl,
+  harvester: harvesterUrl,
+  rocketTrooper: rocketTrooperUrl,
+  scout: scoutUrl,
+  artillery: artilleryUrl,
+  heavyTank: heavyTankUrl,
+};
+
+export const BUILDING_SPRITE_URLS: Record<string, string> = {
+  base: commandCenterUrl,
+  refinery: refineryUrl,
+  barracks: barracksUrl,
+  factory: factoryUrl,
+  powerPlant: powerPlantUrl,
+  guardTower: guardTowerUrl,
+  radar: radarUrl,
+};
+
 const RUNTIME_ASSET_URLS = [
   terrainGrassUrl,
   terrainWaterUrl,
