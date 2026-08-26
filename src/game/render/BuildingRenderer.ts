@@ -53,6 +53,7 @@ export class BuildingRenderer extends Phaser.GameObjects.Graphics {
         } else {
           img.setVisible(false);
         }
+        this.drawBuildingActivity(state, e);
       } else {
         img.setVisible(false);
       }
@@ -90,6 +91,85 @@ export class BuildingRenderer extends Phaser.GameObjects.Graphics {
     this.strokePoints(points, true);
     this.lineStyle(2, 0x9aeaff, 0.92 * pulse);
     this.strokePoints(points, true);
+  }
+
+  /** 建筑常驻动效：设备灯、炉火、雷达扫描和生产指示，让基地不再像静态贴图堆。 */
+  private drawBuildingActivity(state: GameState, e: EntityState): void {
+    const s = gridToScreen(e.x, e.y);
+    const time = this.scene.time.now / 1000;
+    const phase = time * 1.7 + e.id * 0.41;
+    const flicker = 0.58 + (Math.sin(phase * 2.4) + 1) * 0.14;
+
+    if (e.typeId === 'refinery') {
+      const fx = s.x;
+      const fy = s.y - 41;
+      this.fillStyle(0xffb52e, 0.08 * flicker);
+      this.fillCircle(fx, fy, 14 + Math.sin(phase) * 2);
+      this.fillStyle(0xffdf6d, 0.75 * flicker);
+      this.fillCircle(fx - 3, fy + 2, 2.5 + Math.sin(phase * 1.8) * 0.8);
+      this.drawBuildingSmoke(fx + 14, fy - 15, phase, 0.72);
+    } else if (e.typeId === 'powerPlant') {
+      const py = s.y - 39;
+      this.fillStyle(0x60e8ff, 0.16 + flicker * 0.1);
+      this.fillCircle(s.x - 20, py + 12, 2.1 + flicker * 1.2);
+      this.fillCircle(s.x + 20, py + 8, 1.8 + flicker);
+      this.lineStyle(1.2, 0x72dfff, 0.38 + flicker * 0.18);
+      this.lineBetween(s.x - 18, py + 12, s.x - 10, py + 8);
+      this.lineBetween(s.x + 10, py + 8, s.x + 20, py + 8);
+    } else if (e.typeId === 'factory') {
+      const doorY = s.y + 12;
+      const doorPulse = (Math.sin(phase * 1.3) + 1) / 2;
+      this.fillStyle(0xffa33b, 0.12 + doorPulse * 0.18);
+      this.fillRect(s.x - 19, doorY, 38, 4);
+      this.lineStyle(1.2, 0xffcc67, 0.35 + doorPulse * 0.35);
+      this.lineBetween(s.x - 15, doorY - 1, s.x - 15, doorY + 4);
+      this.lineBetween(s.x + 15, doorY - 1, s.x + 15, doorY + 4);
+      if (e.productionQueue.length > 0) this.drawProductionSpinner(s.x, s.y - 61, phase);
+    } else if (e.typeId === 'barracks') {
+      const windowPulse = 0.36 + (Math.sin(phase * 1.2) + 1) * 0.16;
+      this.fillStyle(0x72c8ff, windowPulse);
+      this.fillRect(s.x - 20, s.y - 15, 5, 3);
+      this.fillRect(s.x + 15, s.y - 15, 5, 3);
+      if (e.productionQueue.length > 0) this.drawProductionSpinner(s.x, s.y - 48, phase);
+    } else if (e.typeId === 'radar') {
+      const radius = 22;
+      const angle = phase * 0.65;
+      this.lineStyle(1.35, 0x6de8ff, 0.56);
+      this.lineBetween(s.x, s.y - 30, s.x + Math.cos(angle) * radius, s.y - 30 + Math.sin(angle) * radius * 0.45);
+      this.lineStyle(1, 0x5fdcf2, 0.12);
+      this.strokeCircle(s.x, s.y - 30, radius);
+    } else if (e.typeId === 'guardTower') {
+      const pulse = (Math.sin(phase * 1.15) + 1) / 2;
+      this.lineStyle(1.4, 0xffc44b, 0.16 + pulse * 0.24);
+      this.strokeCircle(s.x, s.y - 16, 22 + pulse * 5);
+      this.fillStyle(0xffe29a, 0.35 + pulse * 0.3);
+      this.fillCircle(s.x, s.y - 35, 2 + pulse * 1.2);
+    } else if (e.typeId === 'base') {
+      const pulse = (Math.sin(phase * 0.8) + 1) / 2;
+      this.lineStyle(1.4, 0x52d5ff, 0.12 + pulse * 0.22);
+      this.strokeCircle(s.x, s.y + 15, 47 + pulse * 3);
+      this.fillStyle(0x6ce6ff, 0.16 + pulse * 0.18);
+      this.fillCircle(s.x, s.y - 55, 2 + pulse * 1.5);
+    }
+  }
+
+  private drawBuildingSmoke(x: number, y: number, phase: number, strength: number): void {
+    for (let i = 0; i < 2; i++) {
+      const drift = Math.sin(phase * 0.8 + i * 1.8) * (3 + i * 2);
+      const rise = ((phase * 0.35 + i * 0.43) % 1) * 14;
+      this.fillStyle(i === 0 ? 0x53635b : 0x8d9789, (0.11 - i * 0.025) * strength);
+      this.fillEllipse(x + drift, y - rise - i * 3, 5 + i * 2, 3 + i);
+    }
+  }
+
+  private drawProductionSpinner(x: number, y: number, phase: number): void {
+    const radius = 6;
+    const angle = phase * 1.7;
+    this.lineStyle(1.6, 0xffd36a, 0.75);
+    for (let i = 0; i < 3; i++) {
+      const a = angle + i * (Math.PI * 2 / 3);
+      this.lineBetween(x + Math.cos(a) * 2, y + Math.sin(a) * 2, x + Math.cos(a) * radius, y + Math.sin(a) * radius);
+    }
   }
 
   private drawBuildingHp(state: GameState, e: EntityState, selected: boolean): void {

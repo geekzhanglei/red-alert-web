@@ -310,6 +310,7 @@ export class GameScene extends Phaser.Scene {
     this.buildings.update(this.sim.state, PLAYER_ID);
     this.units.update(this.sim.state, this.loop.alpha, PLAYER_ID);
     this.mapRenderer.updateResources(this.sim.state);
+    this.mapRenderer.updateAnimations(this.sim.state, this.time.now);
     this.mapRenderer.updateFog(this.sim.state, PLAYER_ID);
     this.minimap.update(this.sim.state);
     this.cameraControl.update(delta / 1000, this.scale.width, this.scale.height);

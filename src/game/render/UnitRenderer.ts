@@ -23,6 +23,8 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
     hpRatio: number;
     bornAt: number;
   }[] = [];
+  private muzzleEffects: { x: number; y: number; angle: number; bornAt: number }[] = [];
+  private destroyEffects: { x: number; y: number; targetId: number; targetOwnerId: number; bornAt: number }[] = [];
   private pool: Phaser.GameObjects.Image[] = [];
   private glowPool: (Phaser.FX.Glow | null)[] = [];
   private groundLayer: Phaser.GameObjects.Graphics;
@@ -104,9 +106,11 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
     // 贴图轮廓由 PreFX Glow 高亮，选中单位不再画底部圆圈。
     for (const { e, px, py } of drawable) {
       const selected = state.selectedEntityIds.includes(e.id);
+      if (selected) this.drawSelectionBrackets(e, px, py);
       this.drawHpBar(e, state, px, py, selected);
     }
     this.drawDamageEffects(state, viewerPlayerId);
+    this.drawDestroyEffects(state, viewerPlayerId);
   }
 
   private consumeCombatEvents(state: GameState): void {
@@ -114,13 +118,20 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
     for (const ev of state.events) {
       if (ev.type === 'shot') {
         this.shots.push({ x1: ev.fromX, y1: ev.fromY, x2: ev.toX, y2: ev.toY, bornAt: now });
+        const from = gridToScreen(ev.fromX, ev.fromY);
+        const to = gridToScreen(ev.toX, ev.toY);
+        this.muzzleEffects.push({ x: ev.fromX, y: ev.fromY, angle: Math.atan2(to.y - from.y, to.x - from.x), bornAt: now });
       } else if (ev.type === 'hit') {
         this.hitEffects.push({ ...ev, bornAt: now });
+      } else if (ev.type === 'destroy') {
+        this.destroyEffects.push({ ...ev, bornAt: now });
       }
     }
     state.events.length = 0;
     this.shots = this.shots.filter((s) => now - s.bornAt < 150);
     this.hitEffects = this.hitEffects.filter((hit) => now - hit.bornAt < 520);
+    this.muzzleEffects = this.muzzleEffects.filter((effect) => now - effect.bornAt < 120);
+    this.destroyEffects = this.destroyEffects.filter((effect) => now - effect.bornAt < 760);
     for (const s of this.shots) {
       const fade = 1 - (now - s.bornAt) / 150;
       const from = gridToScreen(s.x1, s.y1);
@@ -128,6 +139,7 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
       this.lineStyle(1.5, 0xffd24a, fade);
       this.lineBetween(from.x, from.y, to.x, to.y);
     }
+    for (const effect of this.muzzleEffects) this.drawMuzzleFlash(effect, now);
   }
 
   /**
@@ -165,7 +177,84 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
         this.fillStyle(0x59635d, 0.2 * fade);
         this.fillEllipse(sx, sy, 5 + i * 2 + progress * 5, 3 + i + progress * 3);
       }
+      this.lineStyle(1.3, 0xffd35a, 0.55 * fade);
+      for (let i = 0; i < 4; i++) {
+        const angle = hit.targetId * 0.37 + i * Math.PI / 2;
+        const length = 6 + (1 - progress) * 6;
+        this.lineBetween(
+          p.x + Math.cos(angle) * 3,
+          p.y - 10 + Math.sin(angle) * 2,
+          p.x + Math.cos(angle) * length,
+          p.y - 10 + Math.sin(angle) * length * 0.55,
+        );
+      }
     }
+  }
+
+  private drawMuzzleFlash(effect: { x: number; y: number; angle: number; bornAt: number }, now: number): void {
+    const age = now - effect.bornAt;
+    const progress = Math.min(1, age / 120);
+    const fade = 1 - progress;
+    const p = gridToScreen(effect.x, effect.y);
+    const x = p.x + Math.cos(effect.angle) * 10;
+    const y = p.y - 10 + Math.sin(effect.angle) * 5;
+    this.fillStyle(0xffe37d, 0.72 * fade);
+    this.fillCircle(x, y, 3 + fade * 3);
+    this.lineStyle(1.4, 0xffa43b, 0.8 * fade);
+    for (let i = -1; i <= 1; i++) {
+      const spread = i * 0.35;
+      this.lineBetween(x, y, x + Math.cos(effect.angle + spread) * (8 + fade * 8), y + Math.sin(effect.angle + spread) * (5 + fade * 5));
+    }
+  }
+
+  private drawDestroyEffects(state: GameState, viewerPlayerId: number): void {
+    const now = this.scene.time.now;
+    for (const effect of this.destroyEffects) {
+      if (!this.canShowDamageAt(state, effect.targetOwnerId, effect.x, effect.y, viewerPlayerId)) continue;
+      const age = now - effect.bornAt;
+      const progress = Math.min(1, age / 760);
+      const fade = 1 - progress;
+      const p = gridToScreen(effect.x, effect.y);
+      const flash = Math.max(0, 1 - age / 130);
+      this.fillStyle(0xffd66a, 0.2 * flash);
+      this.fillCircle(p.x, p.y - 12, 10 + flash * 12);
+      this.lineStyle(2.2, 0xff8445, 0.72 * fade);
+      this.strokeCircle(p.x, p.y - 11, 8 + progress * 20);
+      for (let i = 0; i < 7; i++) {
+        const angle = effect.targetId * 0.13 + i * Math.PI * 2 / 7;
+        const distance = 5 + progress * 25;
+        this.lineStyle(1.5, i % 2 === 0 ? 0xffdb62 : 0xff6541, 0.75 * fade);
+        this.lineBetween(
+          p.x + Math.cos(angle) * 3,
+          p.y - 11 + Math.sin(angle) * 2,
+          p.x + Math.cos(angle) * distance,
+          p.y - 11 + Math.sin(angle) * distance * 0.55,
+        );
+      }
+      for (let i = 0; i < 3; i++) {
+        const drift = Math.sin(effect.targetId * 0.7 + i + progress * 2) * (4 + i * 2);
+        this.fillStyle(0x4a514c, 0.16 * fade);
+        this.fillEllipse(p.x + drift, p.y - 16 - progress * (8 + i * 5), 10 + i * 4 + progress * 8, 5 + i * 2);
+      }
+    }
+  }
+
+  private drawSelectionBrackets(e: EntityState, px: number, py: number): void {
+    const visual = UNIT_VISUALS[e.typeId] ?? DEFAULT_UNIT_VISUAL;
+    const s = gridToScreen(px, py);
+    const halfW = visual.width * 0.38;
+    const halfH = Math.max(9, visual.height * 0.18);
+    const pulse = 0.66 + Math.sin(this.scene.time.now / 260 + e.id) * 0.2;
+    const arm = 6;
+    this.lineStyle(1.7, 0x8cecff, pulse);
+    this.lineBetween(s.x - halfW, s.y - halfH, s.x - halfW + arm, s.y - halfH);
+    this.lineBetween(s.x - halfW, s.y - halfH, s.x - halfW, s.y - halfH + arm);
+    this.lineBetween(s.x + halfW, s.y - halfH, s.x + halfW - arm, s.y - halfH);
+    this.lineBetween(s.x + halfW, s.y - halfH, s.x + halfW, s.y - halfH + arm);
+    this.lineBetween(s.x - halfW, s.y + halfH, s.x - halfW + arm, s.y + halfH);
+    this.lineBetween(s.x - halfW, s.y + halfH, s.x - halfW, s.y + halfH - arm);
+    this.lineBetween(s.x + halfW, s.y + halfH, s.x + halfW - arm, s.y + halfH);
+    this.lineBetween(s.x + halfW, s.y + halfH, s.x + halfW, s.y + halfH - arm);
   }
 
   private drawSmoke(e: EntityState, ratio: number, now: number): void {

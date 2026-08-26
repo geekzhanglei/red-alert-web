@@ -178,7 +178,7 @@ function fire(state: GameState, e: EntityState, target: EntityState, weapon: Wea
     hpRatio: Math.max(0, Math.min(1, newHp / effTargetMaxHp)),
   });
   if (target.hp <= 0) {
-    state.events.push({ type: 'destroy', targetId: target.id, x: target.x, y: target.y });
+    state.events.push({ type: 'destroy', targetId: target.id, targetOwnerId: target.ownerId, x: target.x, y: target.y });
     removeEntity(state, target.id);
   }
 }

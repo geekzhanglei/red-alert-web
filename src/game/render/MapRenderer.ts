@@ -17,11 +17,13 @@ export class MapRenderer {
   private oreDisplayAmounts = new Map<number, number>();
   private fog: Phaser.GameObjects.Graphics;
   private terrainDetails: Phaser.GameObjects.Graphics;
+  private animatedDetails: Phaser.GameObjects.Graphics;
   private ready = false;
 
   constructor(scene: Phaser.Scene) {
     this.fog = scene.add.graphics().setDepth(50);
     this.terrainDetails = scene.add.graphics().setDepth(0.5);
+    this.animatedDetails = scene.add.graphics().setDepth(2);
   }
 
   init(scene: Phaser.Scene, map: MapState): void {
@@ -129,6 +131,48 @@ export class MapRenderer {
       ore.setVisible(true);
       ore.setAlpha(0.58 + ratio * 0.42);
       ore.setDisplaySize(TILE_W * (0.9 + ratio * 0.34), TILE_H * (0.96 + ratio * 0.42));
+    }
+  }
+
+  /**
+   * 低成本的环境动画：水面反光与矿脉闪烁每帧更新，保持逻辑地图和渲染动画完全分离。
+   * 这层位于资源贴图上方、建筑/单位下方，能让静态地块有持续的呼吸感。
+   */
+  updateAnimations(state: GameState, now: number): void {
+    if (!this.ready) return;
+    const g = this.animatedDetails;
+    g.clear();
+    const map = state.map;
+    const time = now / 1000;
+    for (let y = 0; y < map.height; y++) {
+      for (let x = 0; x < map.width; x++) {
+        const idx = y * map.width + x;
+        const tile = map.tiles[idx];
+        const center = gridToScreen(x, y);
+        const phase = time * 1.35 + ((map.seed ^ Math.imul(x + 17, 92821) ^ Math.imul(y + 31, 68917)) >>> 0) % 97 / 19;
+        if (tile.terrain === 'water') {
+          // 水波不使用贴图位移，只移动高光线，避免地图边缘出现撕裂。
+          const shift = Math.sin(phase) * 3.5;
+          const alpha = 0.12 + (Math.sin(phase * 0.7) + 1) * 0.045;
+          g.lineStyle(1.15, 0xa6e8f4, alpha);
+          g.beginPath();
+          g.moveTo(center.x - 20, center.y - 2 + shift);
+          g.lineTo(center.x - 7, center.y - 5 + shift);
+          g.lineTo(center.x + 7, center.y - 2 + shift);
+          g.lineTo(center.x + 20, center.y - 5 + shift);
+          g.strokePath();
+          g.lineStyle(0.8, 0x56b5d5, alpha * 0.65);
+          g.lineBetween(center.x - 13, center.y + 4 - shift * 0.45, center.x + 13, center.y + 1 - shift * 0.45);
+        } else if (tile.terrain === 'ore' && tile.oreAmount > 0) {
+          // 矿石闪光点帮助玩家快速辨认资源区，同时随储量减少而变弱。
+          const ratio = Phaser.Math.Clamp(tile.oreAmount / 1000, 0.18, 1);
+          const pulse = (Math.sin(phase * 1.8) + 1) / 2;
+          const sparkleAlpha = (0.08 + pulse * 0.2) * ratio;
+          g.fillStyle(0xffed8a, sparkleAlpha);
+          g.fillCircle(center.x - 12 + Math.sin(phase) * 3, center.y - 3, 1.2 + pulse * 1.2);
+          g.fillCircle(center.x + 10 + Math.cos(phase * 0.8) * 2, center.y + 2, 0.8 + pulse);
+        }
+      }
     }
   }
 
