@@ -17,6 +17,12 @@ import { canAfford } from '../state/players';
 import { Minimap } from './Minimap';
 import { ResultOverlay } from '../../ui/ResultOverlay';
 import { BUILDING_SPRITE_URLS, loadAllSprites, UNIT_SPRITE_URLS } from '../../assets/loadSprites';
+import {
+  getBattlefieldInfo,
+  loadBattlefield,
+  requestBattlefieldResume,
+  saveBattlefield,
+} from '../state/battlefieldSave';
 
 const TERRAIN_NAMES: Record<Terrain, string> = {
   grass: '草地',
@@ -70,6 +76,7 @@ export class GameScene extends Phaser.Scene {
   private optionsDialogEl: HTMLElement | null = null;
   private mouseSensitivityEl: HTMLInputElement | null = null;
   private mouseSensitivityValueEl: HTMLOutputElement | null = null;
+  private optionsSaveStatusEl: HTMLElement | null = null;
   private optionsPauseOwned = false;
 
   constructor() {
@@ -78,7 +85,9 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     const diff = (window as unknown as { __diff?: Difficulty }).__diff ?? 'normal';
-    this.sim = new Game(createInitialGameState({ difficulty: diff }));
+    const resumeRequested = Boolean((window as unknown as { __resumeBattlefield?: boolean }).__resumeBattlefield);
+    const restored = resumeRequested ? loadBattlefield() : null;
+    this.sim = new Game(restored ?? createInitialGameState({ difficulty: diff }));
 
     // 预加载原创贴图（docs/01-architecture.md 决策三）
     loadAllSprites(this);
@@ -168,6 +177,7 @@ export class GameScene extends Phaser.Scene {
     this.optionsDialogEl = document.getElementById('options-dialog');
     this.mouseSensitivityEl = document.getElementById('mouse-sensitivity') as HTMLInputElement | null;
     this.mouseSensitivityValueEl = document.getElementById('mouse-sensitivity-value') as HTMLOutputElement | null;
+    this.optionsSaveStatusEl = document.getElementById('options-save-status');
 
     const initialPercent = Math.round(this.cameraControl.getSensitivity() * 100);
     if (this.mouseSensitivityEl) this.mouseSensitivityEl.value = String(initialPercent);
@@ -176,6 +186,26 @@ export class GameScene extends Phaser.Scene {
     document.getElementById('open-options')?.addEventListener('click', () => this.setOptionsOpen(true));
     document.getElementById('close-options')?.addEventListener('click', () => this.setOptionsOpen(false));
     document.getElementById('resume-game')?.addEventListener('click', () => this.setOptionsOpen(false));
+    document.getElementById('save-battlefield')?.addEventListener('click', () => {
+      const info = saveBattlefield(this.sim.state);
+      if (this.optionsSaveStatusEl) {
+        this.optionsSaveStatusEl.textContent = info
+          ? `战场已保存 · 第 ${info.tick} 回合`
+          : '保存失败：浏览器存储不可用';
+      }
+    });
+    document.getElementById('load-battlefield')?.addEventListener('click', () => {
+      const info = getBattlefieldInfo();
+      if (!info) {
+        if (this.optionsSaveStatusEl) this.optionsSaveStatusEl.textContent = '没有可读取的战场存档';
+        return;
+      }
+      if (!requestBattlefieldResume()) {
+        if (this.optionsSaveStatusEl) this.optionsSaveStatusEl.textContent = '读取失败：浏览器存储不可用';
+        return;
+      }
+      window.location.reload();
+    });
     this.optionsDialogEl?.addEventListener('click', (event) => {
       if (event.target === this.optionsDialogEl) this.setOptionsOpen(false);
     });

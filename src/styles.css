@@ -465,6 +465,83 @@ button:focus-visible {
   margin-top: 22px;
 }
 
+.resume-slot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 9px;
+  margin-top: 12px;
+  border: 1px solid #58685c;
+  border-left: 3px solid var(--radar);
+  padding: 9px 10px;
+  background: linear-gradient(90deg, rgb(143 207 156 / 10%), transparent 72%), #111a14;
+}
+
+.resume-slot[hidden] {
+  display: none;
+}
+
+.resume-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.resume-copy small {
+  overflow: hidden;
+  color: #7f9184;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resume-copy strong {
+  overflow: hidden;
+  color: #d4e7d2;
+  font-size: 12px;
+  letter-spacing: .06em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#resume-battlefield,
+#clear-battlefield {
+  border: 1px solid #6d8672;
+  padding: 7px 10px;
+  color: #d9ebd5;
+  font-size: 10px;
+  font-weight: 800;
+  background: #1d3023;
+  cursor: pointer;
+}
+
+#resume-battlefield:hover,
+#resume-battlefield:focus-visible {
+  border-color: var(--warning);
+  color: #fff6c5;
+  outline: none;
+}
+
+#resume-battlefield b {
+  margin-left: 4px;
+  color: var(--warning);
+  font-size: 17px;
+  line-height: 0;
+}
+
+#clear-battlefield {
+  border-color: #4b5950;
+  color: #8d9a90;
+  background: #151d18;
+}
+
+#clear-battlefield:hover,
+#clear-battlefield:focus-visible {
+  border-color: var(--danger);
+  color: #efafa4;
+  outline: none;
+}
+
 .difficulty-card {
   position: relative;
   display: grid;
@@ -3113,6 +3190,38 @@ kbd {
   line-height: 1.55;
 }
 
+.options-save-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.options-save-grid button {
+  padding: 8px 10px;
+  color: #d9e6d3;
+  font: 700 11px/1 system-ui, sans-serif;
+  background: #1b2b20;
+  border: 1px solid #607765;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.options-save-grid button:hover,
+.options-save-grid button:focus-visible {
+  color: #fff6c5;
+  border-color: var(--warning);
+  outline: none;
+}
+
+.options-save-status {
+  min-height: 15px;
+  margin: 7px 0 0;
+  color: #b8cfad;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
 .options-footer {
   display: flex;
   justify-content: flex-end;
@@ -3149,5 +3258,15 @@ kbd {
 
   #left-sidebar #view-actions kbd {
     display: none;
+  }
+
+  .resume-slot {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  #clear-battlefield {
+    grid-column: 2;
+    padding-block: 4px;
+    font-size: 9px;
   }
 }

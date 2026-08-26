@@ -35,9 +35,12 @@ async function installDevHelpers(game: Phaser.Game): Promise<void> {
   (window as unknown as { __diff: Difficulty }).__diff = currentDifficulty;
 }
 
-async function boot(): Promise<void> {
+async function boot(resumeBattlefield = false): Promise<void> {
   const [phaserModule, { GameScene }] = await loadGameRuntime();
   const PhaserRuntime = phaserModule.default ?? phaserModule;
+  const runtimeWindow = window as unknown as { __diff?: Difficulty; __resumeBattlefield?: boolean };
+  runtimeWindow.__diff = currentDifficulty;
+  runtimeWindow.__resumeBattlefield = resumeBattlefield;
   const config: Phaser.Types.Core.GameConfig = {
     type: PhaserRuntime.AUTO,
     parent: 'game-root',
@@ -74,13 +77,13 @@ const root = document.getElementById('game-root');
 function bootWhenReady(): void {
   if (root && root.clientWidth > 0 && root.clientHeight > 0) {
     document.getElementById('boot-screen')?.remove();
-    mountStartMenu(async (difficulty) => {
+    mountStartMenu(async (difficulty, resumeBattlefield = false) => {
       currentDifficulty = difficulty;
       if (import.meta.env.DEV) (window as unknown as { __diff: Difficulty }).__diff = difficulty;
       const app = document.getElementById('app');
       app?.classList.add('app-ready');
       try {
-        await boot();
+        await boot(resumeBattlefield);
       } catch (error) {
         app?.classList.remove('app-ready');
         throw error;

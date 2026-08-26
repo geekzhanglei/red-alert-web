@@ -74,6 +74,11 @@
               <input id="mouse-sensitivity" type="range" min="50" max="200" value="100" step="10" />
             </label>
             <p class="options-help">调整中键拖拽、边缘滚屏和滚轮缩放的速度。设置会自动保存到本机。</p>
+            <div class="options-save-grid" aria-label="战场存档">
+              <button id="save-battlefield" type="button">保存战场</button>
+              <button id="load-battlefield" type="button">读取存档</button>
+            </div>
+            <p id="options-save-status" class="options-save-status" role="status" aria-live="polite"></p>
           </div>
           <footer class="options-footer">
             <button id="resume-game" type="button">返回战场</button>

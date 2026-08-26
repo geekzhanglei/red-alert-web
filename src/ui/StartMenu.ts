@@ -1,4 +1,9 @@
 import { Difficulty } from '../game/state/GameState';
+import {
+  clearBattlefieldSave,
+  consumeBattlefieldResumeRequest,
+  getBattlefieldInfo,
+} from '../game/state/battlefieldSave';
 
 const STORAGE_KEY = 'raw.difficulty';
 const URL_PARAM = 'd';
@@ -33,9 +38,20 @@ function remember(d: Difficulty): void {
   }
 }
 
+function formatSavedAt(timestamp: number): string {
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(timestamp));
+}
+
 /** 启动遮罩：玩家先选难度再 boot。回调 onPick 在用户点按钮后触发。 */
-export function mountStartMenu(onPick: (d: Difficulty) => void | Promise<void>): void {
+export function mountStartMenu(onPick: (d: Difficulty, resume?: boolean) => void | Promise<void>): void {
   const preset = fromUrl() ?? readSaved() ?? 'normal';
+  const saved = getBattlefieldInfo();
+  const resumeRequested = consumeBattlefieldResumeRequest();
 
   const wrap = document.createElement('div');
   wrap.id = 'start-menu';
@@ -77,6 +93,11 @@ export function mountStartMenu(onPick: (d: Difficulty) => void | Promise<void>):
             <div class="mission-code" aria-hidden="true">RA<br /><b>26</b></div>
           </div>
           <div id="start-buttons" class="difficulty-grid"></div>
+          <div id="resume-slot" class="resume-slot" hidden>
+            <div class="resume-copy"><small>最近保存</small><strong id="resume-summary"></strong></div>
+            <button id="resume-battlefield" type="button">继续战场 <b aria-hidden="true">›</b></button>
+            <button id="clear-battlefield" type="button" aria-label="删除战场存档">删除</button>
+          </div>
           <div class="battle-briefing">
             <span><small>区域</small><strong>北境矿区 04</strong></span>
             <span><small>任务</small><strong>摧毁敌方基地</strong></span>
@@ -94,6 +115,39 @@ export function mountStartMenu(onPick: (d: Difficulty) => void | Promise<void>):
   document.body.appendChild(wrap);
 
   const btnWrap = wrap.querySelector<HTMLDivElement>('#start-buttons')!;
+  const resumeSlot = wrap.querySelector<HTMLElement>('#resume-slot');
+  const resumeButton = wrap.querySelector<HTMLButtonElement>('#resume-battlefield');
+  const clearButton = wrap.querySelector<HTMLButtonElement>('#clear-battlefield');
+  const resumeSummary = wrap.querySelector<HTMLElement>('#resume-summary');
+  if (saved && resumeSlot && resumeSummary) {
+    resumeSlot.hidden = false;
+    resumeSummary.textContent = `第 ${saved.tick} 回合 · ${formatSavedAt(saved.savedAt)}`;
+  }
+
+  const launch = async (d: Difficulty, button: HTMLButtonElement, resume: boolean): Promise<void> => {
+    if (wrap.classList.contains('is-deploying')) return;
+    remember(d);
+    wrap.classList.add('is-deploying');
+    wrap.querySelectorAll<HTMLButtonElement>('.difficulty-card, #resume-battlefield').forEach((item) => (item.disabled = true));
+    const state = wrap.querySelector<HTMLElement>('.system-state');
+    if (state) state.lastChild!.textContent = resume ? ' 正在恢复上次战场' : ' 正在建立战区链路';
+    const launchLabel = button.querySelector<HTMLElement>('.difficulty-launch');
+    if (launchLabel) launchLabel.textContent = '部署中…';
+    else if (resume) button.textContent = '恢复中…';
+    try {
+      await onPick(d, resume);
+      wrap.classList.add('is-launching');
+      window.setTimeout(() => wrap.remove(), 180);
+    } catch (error) {
+      console.error('Failed to boot game runtime', error);
+      wrap.classList.remove('is-deploying');
+      wrap.querySelectorAll<HTMLButtonElement>('.difficulty-card, #resume-battlefield').forEach((item) => (item.disabled = false));
+      if (state) state.lastChild!.textContent = ' 部署失败，请重试';
+      if (launchLabel) launchLabel.innerHTML = '重试 <b aria-hidden="true">›</b>';
+      else if (resume) button.innerHTML = '继续战场 <b aria-hidden="true">›</b>';
+    }
+  };
+
   (Object.keys(DIFFICULTY_META) as Difficulty[]).forEach((d) => {
     const meta = DIFFICULTY_META[d];
     const btn = document.createElement('button');
@@ -111,27 +165,27 @@ export function mountStartMenu(onPick: (d: Difficulty) => void | Promise<void>):
       btnWrap.querySelectorAll('.difficulty-card').forEach((item) => item.classList.remove('is-preview'));
       btn.classList.add('is-preview');
     });
-    btn.addEventListener('click', async () => {
-      if (wrap.classList.contains('is-deploying')) return;
-      remember(d);
-      wrap.classList.add('is-deploying');
-      btnWrap.querySelectorAll<HTMLButtonElement>('.difficulty-card').forEach((item) => (item.disabled = true));
-      const state = wrap.querySelector<HTMLElement>('.system-state');
-      if (state) state.lastChild!.textContent = ' 正在建立战区链路';
-      const launch = btn.querySelector<HTMLElement>('.difficulty-launch');
-      if (launch) launch.textContent = '部署中…';
-      try {
-        await onPick(d);
-        wrap.classList.add('is-launching');
-        window.setTimeout(() => wrap.remove(), 180);
-      } catch (error) {
-        console.error('Failed to boot game runtime', error);
-        wrap.classList.remove('is-deploying');
-        btnWrap.querySelectorAll<HTMLButtonElement>('.difficulty-card').forEach((item) => (item.disabled = false));
-        if (state) state.lastChild!.textContent = ' 部署失败，请重试';
-        if (launch) launch.innerHTML = '重试 <b aria-hidden="true">›</b>';
-      }
-    });
+    btn.addEventListener('click', () => void launch(d, btn, false));
     btnWrap.appendChild(btn);
   });
+
+  resumeButton?.addEventListener('click', () => {
+    const latest = getBattlefieldInfo();
+    if (!latest) {
+      if (resumeSlot) resumeSlot.hidden = true;
+      return;
+    }
+    void launch(latest.difficulty, resumeButton, true);
+  });
+  clearButton?.addEventListener('click', () => {
+    clearBattlefieldSave();
+    if (resumeSlot) resumeSlot.hidden = true;
+  });
+
+  if (resumeRequested && saved && resumeButton) {
+    window.setTimeout(() => {
+      const latest = getBattlefieldInfo();
+      if (latest) void launch(latest.difficulty, resumeButton, true);
+    }, 0);
+  }
 }
