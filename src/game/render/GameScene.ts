@@ -126,10 +126,12 @@ export class GameScene extends Phaser.Scene {
     const initialSensitivity = this.readMouseSensitivity();
     cam.setBounds(bounds.x, bounds.y, bounds.width, bounds.height);
     cam.centerOn(home.x, home.y);
-    cam.setBackgroundColor('#101511');
+    cam.setBackgroundColor('#2b412e');
 
     this.cameraControl = new CameraController(this, cam, {
       leftButtonPan: false,
+      // 原版红警 2 是固定比例视图，滚轮不改变战场缩放，避免边缘出现黑色空洞。
+      allowZoom: false,
       sensitivity: initialSensitivity,
       // CameraController 接收地图世界像素，不是 0~63 的逻辑格坐标。
       homeView: { x: home.x, y: home.y, zoom: 1 },

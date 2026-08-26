@@ -18,12 +18,14 @@ export class MapRenderer {
   private fog: Phaser.GameObjects.Graphics;
   private terrainDetails: Phaser.GameObjects.Graphics;
   private animatedDetails: Phaser.GameObjects.Graphics;
+  private worldBackdrop: Phaser.GameObjects.Graphics;
   private ready = false;
 
   constructor(scene: Phaser.Scene) {
     this.fog = scene.add.graphics().setDepth(50);
     this.terrainDetails = scene.add.graphics().setDepth(0.5);
     this.animatedDetails = scene.add.graphics().setDepth(2);
+    this.worldBackdrop = scene.add.graphics().setDepth(-10);
   }
 
   init(scene: Phaser.Scene, map: MapState): void {
@@ -33,6 +35,7 @@ export class MapRenderer {
       this.ready = false;
       return;
     }
+    this.drawWorldBackdrop(map);
     for (let y = 0; y < map.height; y++) {
       for (let x = 0; x < map.width; x++) {
         const idx = y * map.width + x;
@@ -56,6 +59,21 @@ export class MapRenderer {
     }
     this.drawTerrainDetails(map);
     this.ready = true;
+  }
+
+  /**
+   * 等距地图的实际可玩区域是菱形，直接露出 Phaser 默认黑色背景会像地图缺了一角。
+   * 用一层深橄榄色“不可行走区域”填充包围盒，效果接近红警的地图边缘/不可达区，
+   * 同时保留边缘对比，让玩家知道那里不是可操作地块。
+   */
+  private drawWorldBackdrop(map: MapState): void {
+    const bounds = mapWorldBounds(map);
+    const pad = 240;
+    this.worldBackdrop.clear();
+    this.worldBackdrop.fillStyle(0x2b412e, 1);
+    this.worldBackdrop.fillRect(bounds.x - pad, bounds.y - pad, bounds.width + pad * 2, bounds.height + pad * 2);
+    this.worldBackdrop.lineStyle(26, 0x1f3025, 0.28);
+    this.worldBackdrop.strokeRect(bounds.x - 4, bounds.y - 4, bounds.width + 8, bounds.height + 8);
   }
 
   isReady(): boolean {

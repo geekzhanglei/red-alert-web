@@ -4,6 +4,7 @@ export interface CameraControllerOptions {
   minZoom?: number;
   maxZoom?: number;
   zoomStep?: number;         // 每次滚轮缩放的倍率
+  allowZoom?: boolean;       // 原版红警式固定视图时关闭滚轮缩放
   sensitivity?: number;      // 鼠标灵敏度，1 为默认值
   edgeScrollMargin?: number; // 距视口边缘多少像素触发边缘滚屏
   edgeScrollSpeed?: number;  // 边缘滚屏速度（世界像素/秒）
@@ -35,6 +36,7 @@ export class CameraController {
       minZoom: 0.5,
       maxZoom: 3,
       zoomStep: 1.1,
+      allowZoom: false,
       sensitivity: 1,
       edgeScrollMargin: 24,
       edgeScrollSpeed: 600,
@@ -76,6 +78,7 @@ export class CameraController {
     // 由 anchor = p / zoom_old + scroll_old = p / next + scroll_new 反解出：
     //   scroll_new = anchor - p / next
     scene.input.on('wheel', (p: Phaser.Input.Pointer, _over: Phaser.GameObjects.GameObject[], _dx: number, dy: number) => {
+      if (!this.opts.allowZoom) return;
       // 将灵敏度映射到滚轮步长，避免高灵敏度时一次滚轮跳过太多级别。
       const zoomStep = Math.pow(this.opts.zoomStep, this.opts.sensitivity);
       const factor = dy > 0 ? 1 / zoomStep : zoomStep;
