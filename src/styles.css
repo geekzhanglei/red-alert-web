@@ -2877,3 +2877,124 @@ kbd {
     display: block;
   }
 }
+
+/* 最终覆盖：右侧经典栏的电力安全区与紧凑选中状态。 */
+#left-sidebar #build-bar {
+  padding-left: 31px;
+}
+
+#left-sidebar #power-gauge {
+  left: 6px;
+  width: 16px;
+}
+
+#left-sidebar #build-bar button > span:nth-child(2),
+#left-sidebar #unit-catalog .catalog-item-copy {
+  min-width: 0;
+  overflow: hidden;
+}
+
+#left-sidebar #build-bar button small,
+#left-sidebar #unit-catalog .catalog-item-copy small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#left-sidebar #prod-panel {
+  flex: 0 0 auto;
+  max-height: 118px;
+  overflow: hidden;
+  padding: 6px 8px;
+}
+
+#prod-panel .selection-panel-card {
+  gap: 5px;
+}
+
+#prod-panel .selection-panel-heading {
+  align-items: center;
+  padding: 0 1px 4px;
+}
+
+#prod-panel .selection-panel-heading small {
+  font-size: 7px;
+}
+
+#prod-panel .selection-panel-heading h2 {
+  margin-top: 2px;
+  font-size: 12px;
+}
+
+#prod-panel .selection-badge {
+  padding: 2px 4px;
+  font-size: 7px;
+}
+
+#prod-panel .selection-health {
+  gap: 3px;
+}
+
+#prod-panel .selection-health > div {
+  font-size: 8px;
+}
+
+#prod-panel .selection-health > i {
+  height: 5px;
+}
+
+#prod-panel .selection-stats,
+#prod-panel .production-section {
+  display: none;
+}
+
+#prod-panel .selection-compact-meta {
+  overflow: hidden;
+  color: #8d9b8f;
+  font-size: 8px;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#prod-panel .upgrade-card {
+  min-height: 27px;
+  gap: 5px;
+  padding: 4px 5px;
+}
+
+#prod-panel .upgrade-card .upgrade-ring {
+  width: 24px;
+  height: 24px;
+  flex-basis: 24px;
+}
+
+#prod-panel .upgrade-card .upgrade-ring::after {
+  inset: 2px;
+}
+
+#prod-panel .upgrade-card strong,
+#prod-panel .upgrade-card em {
+  font-size: 7px;
+}
+
+#prod-panel .upgrade-card > b {
+  font-size: 13px;
+}
+
+#prod-panel .upgrade-card .upgrade-btn {
+  padding: 3px 5px;
+  font-size: 8px;
+}
+
+@media (max-width: 600px) {
+  #left-sidebar #build-bar {
+    padding-left: 27px;
+  }
+
+  #left-sidebar #power-gauge {
+    left: 5px;
+    width: 15px;
+  }
+}

@@ -69,7 +69,8 @@ export class Minimap {
         if (fog === FOG_UNEXPLORED) continue;
         const tile = state.map.tiles[y * state.map.width + x];
         g.globalAlpha = fog === FOG_EXPLORED ? 0.34 : 0.9;
-        g.fillStyle = TERRAIN_COLOR[tile.terrain];
+        // 采空矿格已经还原为草地；这里保留判断以兼容旧存档中 terrain=ore、oreAmount=0 的数据。
+        g.fillStyle = TERRAIN_COLOR[tile.terrain === 'ore' && tile.oreAmount <= 0 ? 'grass' : tile.terrain];
         g.fillRect(x * MINIMAP_PIXELS_PER_TILE, y * MINIMAP_PIXELS_PER_TILE, MINIMAP_PIXELS_PER_TILE, MINIMAP_PIXELS_PER_TILE);
       }
     }

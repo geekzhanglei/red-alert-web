@@ -115,6 +115,20 @@ describe('生产与电力', () => {
     expect(game.state.players[0].powerConsumed).toBe(20);
   });
 
+  it('车辆入队不增加电力消耗，只有建筑参与电力结算', () => {
+    const game = new Game(createInitialGameState({ testUnits: false }));
+    game.state.map = makeFlatMap(20, 20);
+    const base = spawnBuilding(game.state, 'base', 0, 1, 1);
+    const factory = spawnBuilding(game.state, 'factory', 0, 8, 8);
+    recomputePower(game.state);
+    const powerBeforeQueue = game.state.players[0].powerConsumed;
+    expect(enqueueTrain(game.state, factory.id, 0, 'tank')).toBe(true);
+    recomputePower(game.state);
+    expect(game.state.players[0].powerProduced).toBe(50);
+    expect(game.state.players[0].powerConsumed).toBe(powerBeforeQueue);
+    expect(base.productionQueue).toEqual([]);
+  });
+
   it('出生点被堵住时保留已完成队列，空位出现后再出兵', () => {
     const game = new Game(createInitialGameState({ testUnits: false }));
     game.state.map = makeFlatMap(3, 3);

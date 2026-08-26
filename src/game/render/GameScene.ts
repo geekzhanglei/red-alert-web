@@ -454,22 +454,21 @@ export class GameScene extends Phaser.Scene {
     const hpRatio = Math.max(0, Math.min(100, (sample.hp / maxHp) * 100));
     const title = sample.type === 'unit' ? def.name : def.name;
     const countLabel = items.length > 1 ? ` ×${items.length}` : '';
-    let html = `<div class="selection-panel-card">
+    let html = `<div class="selection-panel-card selection-panel-compact">
       <div class="selection-panel-heading"><div><small>SELECTED ${sample.type === 'unit' ? 'UNIT' : 'STRUCTURE'}</small><h2>${title}${countLabel}</h2></div><span class="selection-badge">${sample.type === 'unit' ? 'UNIT' : 'BASE'}</span></div>
       <div class="selection-health"><div><span>完整度</span><b>${Math.ceil(sample.hp)} / ${Math.round(maxHp)}</b></div><i><em style="width:${hpRatio}%"></em></i></div>
-      <div class="selection-stats">`;
+      <div class="selection-compact-meta">`;
     if (sample.type === 'unit') {
       const unitDef = state.defs[sample.typeId];
-      html += `<div><small>护甲</small><b>${unitDef.armor}</b></div><div><small>速度</small><b>${unitDef.speed} 格/秒</b></div>`;
-      if (unitDef.weapon) {
-        html += `<div><small>攻击</small><b>${(unitDef.weapon.damage * sample.damageMultiplier).toFixed(1)}</b></div><div><small>射程</small><b>${unitDef.weapon.range}</b></div>`;
-      }
-      html += `<div><small>状态</small><b>${this.activityLabel(sample.activity)}</b></div>`;
+      const weaponLabel = unitDef.weapon ? ` · 伤害 ${(
+        unitDef.weapon.damage * sample.damageMultiplier
+      ).toFixed(1)}` : '';
+      html += `${this.activityLabel(sample.activity)} · 护甲 ${unitDef.armor}${weaponLabel}`;
     } else {
       const buildingDef = state.buildingDefs[sample.typeId];
-      html += `<div><small>占地</small><b>${buildingDef.footprint.w}×${buildingDef.footprint.h}</b></div><div><small>电力</small><b>+${buildingDef.powerProvided + sample.powerBonus} / -${buildingDef.powerConsumed}</b></div>`;
-      if (buildingDef.weapon) html += `<div><small>防御</small><b>${buildingDef.weapon.damage}</b></div>`;
-      if (buildingDef.visionRange) html += `<div><small>视野</small><b>${buildingDef.visionRange} 格</b></div>`;
+      html += `${buildingDef.footprint.w}×${buildingDef.footprint.h} 格 · 电力 +${
+        buildingDef.powerProvided + sample.powerBonus
+      } / -${buildingDef.powerConsumed}`;
     }
     html += `</div>`;
 

@@ -6,7 +6,7 @@ export interface Tile {
   terrain: Terrain;
   walkable: boolean;    // 地面单位能否通过
   buildable: boolean;   // 能否放建筑
-  oreAmount: number;    // 矿石储量（阶段五经济系统使用，现阶段恒为 0）
+  oreAmount: number;    // 矿石储量；采空后恢复为普通草地
   occupiedBy: number | null; // 占用该格的实体 id（阶段三寻路/阶段五建造使用）
 }
 

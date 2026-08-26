@@ -6,7 +6,7 @@ import { spawnBuilding, spawnUnit } from '../state/entities';
 import { canAfford, changeMoney } from '../state/players';
 import { canPlace, processCommands } from '../state/commands';
 import { updateCombat } from './combat';
-import { ORE_UNIT_VALUE } from './economy';
+import { ORE_UNIT_VALUE, updateEconomy } from './economy';
 import { MapState } from '../state/map';
 
 function makeMap(width: number, height: number): MapState {
@@ -90,6 +90,22 @@ describe('采矿车循环', () => {
     for (let i = 0; i < 200; i++) game.update(TICK_MS);
     expect(h.cargo).toBe(0); // 已卸货
     expect(game.state.players[0].money).toBe(5000 + 100 * ORE_UNIT_VALUE);
+  });
+
+  it('矿脉耗尽后恢复为普通草地并允许重新建造', () => {
+    const game = new Game(createInitialGameState({ testUnits: false }));
+    game.state.map = makeMap(10, 10);
+    const h = spawnUnit(game.state, 'harvester', 0, 5, 5);
+    const tile = game.state.map.tiles[5 * 10 + 5];
+    setOre(game.state.map, 5, 5);
+    tile.oreAmount = 1;
+    h.harvestPhase = 'mining';
+
+    updateEconomy(game.state, 1);
+
+    expect(tile.oreAmount).toBe(0);
+    expect(tile.terrain).toBe('grass');
+    expect(tile.buildable).toBe(true);
   });
 });
 

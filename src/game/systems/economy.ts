@@ -67,6 +67,13 @@ function mine(state: GameState, h: EntityState, dt: number): void {
   const take = Math.min(def.harvestRate * dt, tile.oreAmount, def.cargoCapacity - h.cargo);
   tile.oreAmount -= take;
   h.cargo += take;
+  // 储量归零后把矿格还原为普通草地：主地图和小地图都不应继续显示已采空矿脉，
+  // 同时释放建造属性，后续可以在这里重新铺设建筑。
+  if (tile.oreAmount <= 0) {
+    tile.oreAmount = 0;
+    tile.terrain = 'grass';
+    tile.buildable = true;
+  }
   if (h.cargo >= def.cargoCapacity) {
     h.harvestPhase = 'seekingRefinery';
     const refinery = findNearestRefinery(state, h);
