@@ -4,6 +4,7 @@ export interface CameraControllerOptions {
   minZoom?: number;
   maxZoom?: number;
   zoomStep?: number;         // 每次滚轮缩放的倍率
+  sensitivity?: number;      // 鼠标灵敏度，1 为默认值
   edgeScrollMargin?: number; // 距视口边缘多少像素触发边缘滚屏
   edgeScrollSpeed?: number;  // 边缘滚屏速度（世界像素/秒）
   leftButtonPan?: boolean;   // 阶段三框选接入后改为 false，左键拖拽让给框选
@@ -34,6 +35,7 @@ export class CameraController {
       minZoom: 0.5,
       maxZoom: 3,
       zoomStep: 1.1,
+      sensitivity: 1,
       edgeScrollMargin: 24,
       edgeScrollSpeed: 600,
       leftButtonPan: true,
@@ -63,8 +65,8 @@ export class CameraController {
     });
     scene.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       if (!this.dragging) return;
-      this.cam.scrollX -= p.x - this.lastX;
-      this.cam.scrollY -= p.y - this.lastY;
+      this.cam.scrollX -= (p.x - this.lastX) * this.opts.sensitivity;
+      this.cam.scrollY -= (p.y - this.lastY) * this.opts.sensitivity;
       this.lastX = p.x;
       this.lastY = p.y;
     });
@@ -74,7 +76,9 @@ export class CameraController {
     // 由 anchor = p / zoom_old + scroll_old = p / next + scroll_new 反解出：
     //   scroll_new = anchor - p / next
     scene.input.on('wheel', (p: Phaser.Input.Pointer, _over: Phaser.GameObjects.GameObject[], _dx: number, dy: number) => {
-      const factor = dy > 0 ? 1 / this.opts.zoomStep : this.opts.zoomStep;
+      // 将灵敏度映射到滚轮步长，避免高灵敏度时一次滚轮跳过太多级别。
+      const zoomStep = Math.pow(this.opts.zoomStep, this.opts.sensitivity);
+      const factor = dy > 0 ? 1 / zoomStep : zoomStep;
       const anchor = this.cam.getWorldPoint(p.x, p.y);
       const next = Phaser.Math.Clamp(this.cam.zoom * factor, this.opts.minZoom, this.opts.maxZoom);
       this.cam.zoom = next;
@@ -112,9 +116,19 @@ export class CameraController {
     else if (p.y >= viewportHeight - m) dy += 1;
     if (dx !== 0 || dy !== 0) {
       // 世界距离 = 屏幕距离 / zoom，缩放后滚屏速度保持一致
-      const speed = (this.opts.edgeScrollSpeed * dt) / this.cam.zoom;
+      const speed = (this.opts.edgeScrollSpeed * this.opts.sensitivity * dt) / this.cam.zoom;
       this.cam.scrollX += dx * speed;
       this.cam.scrollY += dy * speed;
     }
+  }
+
+  /** 设置鼠标灵敏度（0.5～2.0，1.0 为原始速度）。 */
+  setSensitivity(value: number): void {
+    if (!Number.isFinite(value)) return;
+    this.opts.sensitivity = Phaser.Math.Clamp(value, 0.5, 2);
+  }
+
+  getSensitivity(): number {
+    return this.opts.sensitivity;
   }
 }

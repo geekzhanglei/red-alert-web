@@ -67,6 +67,10 @@ export class GameScene extends Phaser.Scene {
   private activeCatalogTab: CatalogTab = 'structures';
   private catalogStructureKey = '';
   private resultOverlay = new ResultOverlay();
+  private optionsDialogEl: HTMLElement | null = null;
+  private mouseSensitivityEl: HTMLInputElement | null = null;
+  private mouseSensitivityValueEl: HTMLOutputElement | null = null;
+  private optionsPauseOwned = false;
 
   constructor() {
     super('game');
@@ -105,12 +109,14 @@ export class GameScene extends Phaser.Scene {
     const home = commandCenter
       ? gridToScreen(commandCenter.x, commandCenter.y)
       : { x: bounds.centerX, y: bounds.centerY };
+    const initialSensitivity = this.readMouseSensitivity();
     cam.setBounds(bounds.x, bounds.y, bounds.width, bounds.height);
     cam.centerOn(home.x, home.y);
     cam.setBackgroundColor('#101511');
 
     this.cameraControl = new CameraController(this, cam, {
       leftButtonPan: false,
+      sensitivity: initialSensitivity,
       // CameraController 接收地图世界像素，不是 0~63 的逻辑格坐标。
       homeView: { x: home.x, y: home.y, zoom: 1 },
     });
@@ -131,12 +137,74 @@ export class GameScene extends Phaser.Scene {
     this.wireBuildBar();
     this.wireCatalog();
     this.wireViewActions();
+    this.wireOptions();
     this.wireKeyboard();
   }
 
   private wireViewActions(): void {
     document.getElementById('home-view')?.addEventListener('click', () => this.cameraControl.goHome());
     document.getElementById('back-to-menu')?.addEventListener('click', () => window.location.reload());
+  }
+
+  private readMouseSensitivity(): number {
+    try {
+      const stored = Number(window.localStorage.getItem('red-alert.mouseSensitivity'));
+      if (Number.isFinite(stored)) return Phaser.Math.Clamp(stored, 50, 200) / 100;
+    } catch {
+      // 隐私模式或禁用存储时使用默认值，不影响游戏运行。
+    }
+    return 1;
+  }
+
+  private persistMouseSensitivity(percent: number): void {
+    try {
+      window.localStorage.setItem('red-alert.mouseSensitivity', String(percent));
+    } catch {
+      // 无法持久化时仍保留当前局内设置。
+    }
+  }
+
+  private wireOptions(): void {
+    this.optionsDialogEl = document.getElementById('options-dialog');
+    this.mouseSensitivityEl = document.getElementById('mouse-sensitivity') as HTMLInputElement | null;
+    this.mouseSensitivityValueEl = document.getElementById('mouse-sensitivity-value') as HTMLOutputElement | null;
+
+    const initialPercent = Math.round(this.cameraControl.getSensitivity() * 100);
+    if (this.mouseSensitivityEl) this.mouseSensitivityEl.value = String(initialPercent);
+    if (this.mouseSensitivityValueEl) this.mouseSensitivityValueEl.value = `${initialPercent}%`;
+
+    document.getElementById('open-options')?.addEventListener('click', () => this.setOptionsOpen(true));
+    document.getElementById('close-options')?.addEventListener('click', () => this.setOptionsOpen(false));
+    document.getElementById('resume-game')?.addEventListener('click', () => this.setOptionsOpen(false));
+    this.optionsDialogEl?.addEventListener('click', (event) => {
+      if (event.target === this.optionsDialogEl) this.setOptionsOpen(false);
+    });
+    this.mouseSensitivityEl?.addEventListener('input', () => {
+      const percent = Phaser.Math.Clamp(Number(this.mouseSensitivityEl?.value ?? 100), 50, 200);
+      this.cameraControl.setSensitivity(percent / 100);
+      if (this.mouseSensitivityValueEl) this.mouseSensitivityValueEl.value = `${percent}%`;
+      this.persistMouseSensitivity(percent);
+    });
+    window.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      this.setOptionsOpen(Boolean(this.optionsDialogEl?.hidden));
+    });
+  }
+
+  private setOptionsOpen(open: boolean): void {
+    if (!this.optionsDialogEl) return;
+    this.optionsDialogEl.hidden = !open;
+    if (open) {
+      if (!this.loop.paused) {
+        this.loop.togglePause();
+        this.optionsPauseOwned = true;
+      }
+      this.mouseSensitivityEl?.focus();
+    } else if (this.optionsPauseOwned) {
+      this.loop.togglePause();
+      this.optionsPauseOwned = false;
+    }
   }
 
   /** 暂停/速度指示器：屏幕中央半透明大字。游戏进行中显示，胜负已结时隐藏。 */

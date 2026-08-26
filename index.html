@@ -32,6 +32,7 @@
         </section>
         <nav id="view-actions" aria-label="战术操作">
           <button id="home-view" type="button" title="恢复开局的地图位置与缩放"><kbd>H</kbd> 主视图</button>
+          <button id="open-options" type="button" title="打开游戏选项"><kbd>Esc</kbd> 选项</button>
           <button id="back-to-menu" type="button" title="结束当前试玩并返回难度选择">退出战局</button>
         </nav>
         <nav id="catalog-tabs" aria-label="生产分类">
@@ -58,6 +59,27 @@
         </aside>
         <p id="controls-hint">左键选中 · 右键移动/攻击 · 中键拖拽平移 · 滚轮缩放 · H 回主视图 · 空格暂停 · Shift+1/2/3 调速 · Ctrl+1~9 编队 · 1~9 复读</p>
       </aside>
+      <section id="options-dialog" class="options-dialog" hidden aria-label="游戏选项">
+        <div class="options-window" role="dialog" aria-modal="true" aria-labelledby="options-title">
+          <header class="options-header">
+            <div>
+              <small>COMMAND OPTIONS</small>
+              <h2 id="options-title">游戏选项</h2>
+            </div>
+            <button id="close-options" class="options-close" type="button" aria-label="关闭选项">×</button>
+          </header>
+          <div class="options-body">
+            <label class="options-range" for="mouse-sensitivity">
+              <span><b>鼠标灵敏度</b><output id="mouse-sensitivity-value" for="mouse-sensitivity">100%</output></span>
+              <input id="mouse-sensitivity" type="range" min="50" max="200" value="100" step="10" />
+            </label>
+            <p class="options-help">调整中键拖拽、边缘滚屏和滚轮缩放的速度。设置会自动保存到本机。</p>
+          </div>
+          <footer class="options-footer">
+            <button id="resume-game" type="button">返回战场</button>
+          </footer>
+        </div>
+      </section>
       <div id="squad-flash" aria-hidden="true"></div>
     </main>
     <script type="module" src="/src/main.ts"></script>
