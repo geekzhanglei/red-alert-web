@@ -21,6 +21,8 @@ export interface UnitDefinition {
   armor: ArmorType;
   /** 无 weapon 的单位（如采矿车）不参与战斗。 */
   weapon?: WeaponDefinition;
+  /** 自动接敌时的装甲优先级；同一优先级内再按距离选择。 */
+  targetPriority?: ArmorType[];
   /** 采矿车载货上限（矿）。非采矿车为 0。 */
   cargoCapacity: number;
   /** 采矿速率：每秒采多少矿。非采矿车为 0。 */
@@ -42,6 +44,7 @@ export const UNIT_DEFINITIONS: UnitDefinitionMap = {
     speed: 2.2,
     armor: 'light',
     weapon: { damage: 8, range: 2, reloadTicks: 30, modifiers: { light: 1, heavy: 0.5, structure: 0.25 } },
+    targetPriority: ['light', 'heavy', 'structure'],
     cargoCapacity: 0,
     harvestRate: 0,
     visionRange: 6,
@@ -57,6 +60,7 @@ export const UNIT_DEFINITIONS: UnitDefinitionMap = {
     speed: 1.6,
     armor: 'heavy',
     weapon: { damage: 15, range: 3, reloadTicks: 45, modifiers: { light: 0.75, heavy: 1, structure: 1.25 } },
+    targetPriority: ['structure', 'heavy', 'light'],
     cargoCapacity: 0,
     harvestRate: 0,
     visionRange: 7,
@@ -73,6 +77,7 @@ export const UNIT_DEFINITIONS: UnitDefinitionMap = {
     armor: 'light',
     // 反装甲单位：对重甲有效，对步兵和建筑效率较低。
     weapon: { damage: 22, range: 3, reloadTicks: 50, modifiers: { light: 0.55, heavy: 1.5, structure: 0.45 } },
+    targetPriority: ['heavy', 'structure', 'light'],
     cargoCapacity: 0,
     harvestRate: 0,
     visionRange: 6,
@@ -89,6 +94,7 @@ export const UNIT_DEFINITIONS: UnitDefinitionMap = {
     armor: 'light',
     // 速度和视野换取较低的火力，适合探路和追击步兵。
     weapon: { damage: 7, range: 3, reloadTicks: 20, modifiers: { light: 1.25, heavy: 0.35, structure: 0.1 } },
+    targetPriority: ['light', 'structure', 'heavy'],
     cargoCapacity: 0,
     harvestRate: 0,
     visionRange: 10,
@@ -105,6 +111,7 @@ export const UNIT_DEFINITIONS: UnitDefinitionMap = {
     armor: 'heavy',
     // 远程攻城单位：射程长、装填慢，容易被近身单位克制。
     weapon: { damage: 40, range: 6, reloadTicks: 90, modifiers: { light: 1, heavy: 0.8, structure: 1.4 } },
+    targetPriority: ['structure', 'heavy', 'light'],
     cargoCapacity: 0,
     harvestRate: 0,
     visionRange: 8,
@@ -120,6 +127,7 @@ export const UNIT_DEFINITIONS: UnitDefinitionMap = {
     speed: 1.05,
     armor: 'heavy',
     weapon: { damage: 25, range: 4, reloadTicks: 55, modifiers: { light: 0.9, heavy: 1, structure: 1.2 } },
+    targetPriority: ['structure', 'heavy', 'light'],
     cargoCapacity: 0,
     harvestRate: 0,
     visionRange: 7,

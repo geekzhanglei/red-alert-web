@@ -97,14 +97,20 @@ function weaponOf(state: GameState, e: EntityState): WeaponDefinition | undefine
 }
 
 function findNearestEnemyInRange(state: GameState, source: EntityState, range: number): EntityState | null {
+  const priority = source.type === 'unit' ? state.defs[source.typeId].targetPriority ?? [] : [];
   let best: EntityState | null = null;
+  let bestPriority = Infinity;
   let bestDistance = Infinity;
   for (const id of state.entitiesOrder) {
     const target = state.entities[id];
     if (!target || target.ownerId === source.ownerId) continue;
     const distance = Math.hypot(target.x - source.x, target.y - source.y);
-    if (distance <= range + 0.1 && distance < bestDistance) {
+    if (distance > range + 0.1) continue;
+    const armor = armorOf(state, target);
+    const priorityIndex = priority.length === 0 ? 0 : Math.max(0, priority.indexOf(armor));
+    if (priorityIndex < bestPriority || (priorityIndex === bestPriority && distance < bestDistance)) {
       best = target;
+      bestPriority = priorityIndex;
       bestDistance = distance;
     }
   }

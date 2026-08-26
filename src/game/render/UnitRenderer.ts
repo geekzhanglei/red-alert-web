@@ -279,13 +279,38 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
   private drawTargetMarkers(state: GameState): void {
     for (const id of state.selectedEntityIds) {
       const e = state.entities[id];
-      if (!e || e.command?.type !== 'move') continue;
-      const t = gridToScreen(e.command.targetX, e.command.targetY);
-      this.lineStyle(2, 0xf2d93b, 0.7);
-      const r = 6;
-      this.lineBetween(t.x - r, t.y - r / 2, t.x + r, t.y + r / 2);
-      this.lineBetween(t.x - r, t.y + r / 2, t.x + r, t.y - r / 2);
+      if (!e) continue;
+      if (e.command?.type === 'move') {
+        const t = gridToScreen(e.command.targetX, e.command.targetY);
+        this.lineStyle(2, 0xf2d93b, 0.7);
+        const r = 6;
+        this.lineBetween(t.x - r, t.y - r / 2, t.x + r, t.y + r / 2);
+        this.lineBetween(t.x - r, t.y + r / 2, t.x + r, t.y - r / 2);
+      }
+      if (e.command?.type === 'attack') {
+        const target = state.entities[e.command.targetEntityId];
+        if (target) this.drawAttackReticle(target);
+      }
     }
+  }
+
+  /** 攻击命令的目标反馈：只标记敌方目标，不给己方单位再画一个底部圆圈。 */
+  private drawAttackReticle(target: EntityState): void {
+    const p = gridToScreen(target.x, target.y);
+    const r = target.type === 'building' ? 18 : 11;
+    const gap = target.type === 'building' ? 5 : 3;
+    const arm = target.type === 'building' ? 8 : 5;
+    const alpha = 0.7 + Math.sin(this.scene.time.now / 180) * 0.18;
+    this.lineStyle(2, 0xff685b, alpha);
+    // 四段准星比完整圆圈更容易辨认目标，也不会和选中单位的轮廓高亮混淆。
+    this.lineBetween(p.x - r, p.y - gap, p.x - r + arm, p.y - gap);
+    this.lineBetween(p.x - r, p.y - gap, p.x - r, p.y - gap + arm);
+    this.lineBetween(p.x + r, p.y - gap, p.x + r - arm, p.y - gap);
+    this.lineBetween(p.x + r, p.y - gap, p.x + r, p.y - gap + arm);
+    this.lineBetween(p.x - r, p.y + gap, p.x - r + arm, p.y + gap);
+    this.lineBetween(p.x - r, p.y + gap, p.x - r, p.y + gap - arm);
+    this.lineBetween(p.x + r, p.y + gap, p.x + r - arm, p.y + gap);
+    this.lineBetween(p.x + r, p.y + gap, p.x + r, p.y + gap - arm);
   }
 
   private lerp(a: number, b: number, alpha: number): number {

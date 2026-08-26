@@ -77,6 +77,19 @@ describe('战斗系统', () => {
     expect(countShots(game.state)).toBe(2);
   });
 
+  it('自动接敌按单位目标偏好选择装甲类型', () => {
+    const game = new Game(createInitialGameState({ testUnits: false }));
+    const tank = spawnUnit(game.state, 'tank', 0, 5, 5);
+    const infantry = spawnUnit(game.state, 'infantry', 1, 7, 5);
+    const refinery = spawnBuilding(game.state, 'refinery', 1, 6, 6);
+
+    updateCombat(game.state, TICK_MS / 1000);
+
+    expect(Math.hypot(infantry.x - tank.x, infantry.y - tank.y)).toBeLessThanOrEqual(3.1);
+    expect(Math.hypot(refinery.x - tank.x, refinery.y - tank.y)).toBeLessThanOrEqual(3.1);
+    expect(tank.attackTargetId).toBe(refinery.id);
+  });
+
   it('坦克可以直接攻击敌方步兵并生成命中损坏事件', () => {
     const { game, a, d } = makePair('tank', 'infantry', 1, 0);
     game.state.pendingCommands.push({ type: 'attack', playerId: 0, entityId: a.id, targetEntityId: d.id });

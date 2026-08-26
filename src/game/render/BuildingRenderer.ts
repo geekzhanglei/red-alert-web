@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { GameState } from '../state/GameState';
 import { EntityState } from '../state/entities';
-import { gridToScreen } from './isometric';
+import { gridToScreen, TILE_H, TILE_W } from './isometric';
 import { textureKeyFor } from '../../assets/loadSprites';
 import { FOG_VISIBLE, getFog } from '../state/visibility';
 
@@ -61,8 +61,35 @@ export class BuildingRenderer extends Phaser.GameObjects.Graphics {
     // 原版选中建筑不弹出侧栏详情卡，直接在地图实体上显示生命条。
     for (const e of drawable) {
       const selected = state.selectedEntityIds.includes(e.id);
+      if (selected) this.drawSelectionContour(state, e);
       this.drawBuildingHp(state, e, selected);
     }
+  }
+
+  /**
+   * 建筑选中反馈必须覆盖完整 footprint，而不是给每个地格画一个小矩形。
+   * 用 footprint 外轮廓做一条轻量的等距菱形描边，既能看出占地范围，也不会盖住建筑贴图。
+   */
+  private drawSelectionContour(state: GameState, e: EntityState): void {
+    const def = state.buildingDefs[e.typeId];
+    const top = gridToScreen(e.tileX, e.tileY);
+    const right = gridToScreen(e.tileX + def.footprint.w - 1, e.tileY);
+    const bottom = gridToScreen(e.tileX + def.footprint.w - 1, e.tileY + def.footprint.h - 1);
+    const left = gridToScreen(e.tileX, e.tileY + def.footprint.h - 1);
+    const points = [
+      { x: top.x, y: top.y - TILE_H / 2 },
+      { x: right.x + TILE_W / 2, y: right.y },
+      { x: bottom.x, y: bottom.y + TILE_H / 2 },
+      { x: left.x - TILE_W / 2, y: left.y },
+    ];
+    const pulse = 0.78 + Math.sin(this.scene.time.now / 260) * 0.14;
+
+    this.fillStyle(0x36c8ff, 0.055);
+    this.fillPoints(points, true);
+    this.lineStyle(6, 0x35cfff, 0.12 * pulse);
+    this.strokePoints(points, true);
+    this.lineStyle(2, 0x9aeaff, 0.92 * pulse);
+    this.strokePoints(points, true);
   }
 
   private drawBuildingHp(state: GameState, e: EntityState, selected: boolean): void {
