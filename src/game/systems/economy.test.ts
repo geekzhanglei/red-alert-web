@@ -62,6 +62,8 @@ describe('采矿车循环', () => {
 
   it('寻矿→挖矿→回矿场卸货→资金增长', () => {
     const game = new Game(createInitialGameState({ testUnits: false }));
+    // 该用例只验证采矿循环，隔离 AI 玩家避免其战略单位干扰矿场血量。
+    game.state.players = [{ id: 0, money: 5000, powerProduced: 0, powerConsumed: 0 }];
     game.state.map = makeMap(14, 10);
     const refinery = spawnBuilding(game.state, 'refinery', 0, 5, 5); // footprint (5,5)-(6,6)
     setOre(game.state.map, 10, 5);
@@ -113,6 +115,8 @@ describe('建筑放置（build 命令）', () => {
   it('合法放置：扣钱、占满 footprint、生成建筑', () => {
     const game = new Game(createInitialGameState({ testUnits: false }));
     game.state.map = makeMap(10, 10);
+    // 矿场会消耗电力，先放置基地提供基础电力。
+    spawnBuilding(game.state, 'base', 0, 6, 6);
     const def = game.state.buildingDefs.refinery;
     game.state.pendingCommands.push({ type: 'build', playerId: 0, buildingTypeId: 'refinery', x: 2, y: 2 });
     game.update(TICK_MS);
@@ -127,6 +131,25 @@ describe('建筑放置（build 命令）', () => {
         expect(game.state.map.tiles[(2 + dy) * 10 + (2 + dx)].occupiedBy).toBe(building!.id);
       }
     }
+  });
+
+  it('电力不足时不放置耗电建筑，但允许建造发电厂恢复供电', () => {
+    const game = new Game(createInitialGameState({ testUnits: false }));
+    game.state.map = makeMap(14, 14);
+    spawnBuilding(game.state, 'base', 0, 10, 10); // +50
+    spawnBuilding(game.state, 'factory', 0, 5, 5); // -50，当前刚好平衡
+
+    const moneyBeforeBarracks = game.state.players[0].money;
+    game.state.pendingCommands.push({ type: 'build', playerId: 0, buildingTypeId: 'barracks', x: 1, y: 1 });
+    game.update(TICK_MS);
+
+    expect(game.state.players[0].money).toBe(moneyBeforeBarracks);
+    expect(game.state.entitiesOrder.some((id) => game.state.entities[id]?.typeId === 'barracks')).toBe(false);
+
+    game.state.pendingCommands.push({ type: 'build', playerId: 0, buildingTypeId: 'powerPlant', x: 1, y: 4 });
+    game.update(TICK_MS);
+    expect(game.state.players[0].money).toBe(moneyBeforeBarracks - game.state.buildingDefs.powerPlant.cost);
+    expect(game.state.entitiesOrder.some((id) => game.state.entities[id]?.typeId === 'powerPlant')).toBe(true);
   });
 
   it('canPlace：叠放/水上/越界都不可建', () => {

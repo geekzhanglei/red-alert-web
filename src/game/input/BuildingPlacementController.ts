@@ -4,7 +4,7 @@ import { PLAYER_ID } from '../state/GameState';
 import { BuildingDefinition } from '../data/buildings';
 import { screenToGrid, gridToScreen } from '../render/isometric';
 import { canPlace } from '../state/commands';
-import { canAfford } from '../state/players';
+import { canAfford, canSustainBuilding } from '../state/players';
 
 /**
  * 建筑放置控制器（docs/06-economy.md §A3）：选种 → 鼠标移动预览（ghost）→ 点击确认 → 取消（Esc/右键空白）。
@@ -67,6 +67,9 @@ export class BuildingPlacementController {
 
   /** HUD 按钮触发。 */
   select(def: BuildingDefinition): void {
+    if (!canAfford(this.game.state, PLAYER_ID, def.cost) || !canSustainBuilding(this.game.state, PLAYER_ID, def)) {
+      return;
+    }
     this.selected = def;
     this.active = true;
     this.ghost.setVisible(true);
@@ -97,7 +100,10 @@ export class BuildingPlacementController {
     const gx = Math.round(g.x);
     const gy = Math.round(g.y);
     const def = this.selected;
-    const placeable = canPlace(this.game.state, gx, gy, def) && canAfford(this.game.state, PLAYER_ID, def.cost);
+    const terrainPlaceable = canPlace(this.game.state, gx, gy, def);
+    const affordable = canAfford(this.game.state, PLAYER_ID, def.cost);
+    const powerReady = canSustainBuilding(this.game.state, PLAYER_ID, def);
+    const placeable = terrainPlaceable && affordable && powerReady;
     const color = placeable ? 0x4caf50 : 0xe04848;
 
     this.ghost.clear();
@@ -111,7 +117,8 @@ export class BuildingPlacementController {
         this.ghost.strokePoints(pts, true, true);
       }
     }
-    this.label.setText(`${def.name} $${def.cost} · ${placeable ? '可建' : '不可建'}`);
+    const status = !affordable ? '资金不足' : !powerReady ? '电力不足' : !terrainPlaceable ? '不可建' : '可建';
+    this.label.setText(`${def.name} $${def.cost} · ${status}`);
     this.label.setPosition(this.curX + 14, this.curY + 14);
     this.label.setColor(placeable ? '#a8e0a8' : '#ffa0a0');
   }
@@ -124,7 +131,11 @@ export class BuildingPlacementController {
     const g = screenToGrid(world.x, world.y);
     const gx = Math.round(g.x);
     const gy = Math.round(g.y);
-    if (!canPlace(this.game.state, gx, gy, def) || !canAfford(this.game.state, PLAYER_ID, def.cost)) {
+    if (
+      !canPlace(this.game.state, gx, gy, def) ||
+      !canAfford(this.game.state, PLAYER_ID, def.cost) ||
+      !canSustainBuilding(this.game.state, PLAYER_ID, def)
+    ) {
       return; // 落格校验失败，保留 ghost 让玩家继续尝试
     }
     this.game.state.pendingCommands.push({ type: 'build', playerId: PLAYER_ID, buildingTypeId: def.id, x: gx, y: gy });

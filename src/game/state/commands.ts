@@ -3,7 +3,7 @@ import type { EntityState } from './entities';
 import { spawnBuilding } from './entities';
 import { findPath } from '../pathfinding/AStar';
 import { tileAt } from './map';
-import { canAfford, changeMoney } from './players';
+import { canAfford, canSustainBuilding, changeMoney } from './players';
 import type { BuildingDefinition } from '../data/buildings';
 import { enqueueTrain } from '../systems/production';
 import { applyUpgrade } from '../systems/upgrade';
@@ -99,6 +99,7 @@ export function processCommands(state: GameState): void {
         const ownerId = cmd.playerId;
         if (!def) break;
         if (!canAfford(state, ownerId, def.cost)) break; // 钱不够
+        if (!canSustainBuilding(state, ownerId, def)) break; // 电力不足
         if (!canPlace(state, cmd.x, cmd.y, def)) break; // 放不下（重叠/水上/越界）
         changeMoney(state, ownerId, -def.cost);
         spawnBuilding(state, cmd.buildingTypeId, ownerId, cmd.x, cmd.y);

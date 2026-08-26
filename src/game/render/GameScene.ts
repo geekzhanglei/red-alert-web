@@ -13,7 +13,7 @@ import { CameraController } from '../input/CameraController';
 import { SelectionController } from '../input/SelectionController';
 import { SquadController } from '../input/SquadController';
 import { BuildingPlacementController } from '../input/BuildingPlacementController';
-import { canAfford } from '../state/players';
+import { canAfford, canSustainBuilding } from '../state/players';
 import { Minimap } from './Minimap';
 import { ResultOverlay } from '../../ui/ResultOverlay';
 import { BUILDING_SPRITE_URLS, loadAllSprites, UNIT_SPRITE_URLS } from '../../assets/loadSprites';
@@ -370,7 +370,10 @@ export class GameScene extends Phaser.Scene {
       const visible = category === this.activeCatalogTab && this.isBuildingUnlocked(defId);
       btn.hidden = !visible;
       const affordable = canAfford(this.sim.state, PLAYER_ID, def.cost);
-      btn.disabled = !affordable;
+      const powerReady = canSustainBuilding(this.sim.state, PLAYER_ID, def);
+      btn.disabled = !affordable || !powerReady;
+      btn.dataset.reason = !affordable ? 'money' : !powerReady ? 'power' : '';
+      btn.title = !affordable ? `${def.name} · 资金不足` : !powerReady ? `${def.name} · 电力不足` : `${def.name} · 点击放置`;
       btn.classList.toggle('active', this.placement.isActive() && this.placement.selectedId() === def.id);
     }
   }

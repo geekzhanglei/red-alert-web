@@ -79,6 +79,10 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
           const visual = UNIT_VISUALS[e.typeId] ?? DEFAULT_UNIT_VISUAL;
           img.setDisplaySize(visual.width, visual.height);
           img.setOrigin(0.5, visual.originY);
+          // Image 对象来自对象池，显式重置 alpha/混合模式，避免某个单位
+          // 曾被特效或隐藏状态改写后，矿车复用对象时看起来发虚发透。
+          img.setAlpha(1);
+          img.setBlendMode(Phaser.BlendModes.NORMAL);
           const motion = getUnitMotionVisual(e, state.tick, alpha);
           // 轻微横向步伐形变让静态方向图集有行进节奏；纵向比例保持不变，接地点不会上下跳。
           img.setScale(img.scaleX * motion.scaleX, img.scaleY);
