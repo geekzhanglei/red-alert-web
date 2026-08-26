@@ -107,7 +107,8 @@ function findNearestEnemyInRange(state: GameState, source: EntityState, range: n
     const distance = Math.hypot(target.x - source.x, target.y - source.y);
     if (distance > range + 0.1) continue;
     const armor = armorOf(state, target);
-    const priorityIndex = priority.length === 0 ? 0 : Math.max(0, priority.indexOf(armor));
+    const listedIndex = priority.indexOf(armor);
+    const priorityIndex = priority.length === 0 ? 0 : listedIndex >= 0 ? listedIndex : priority.length;
     if (priorityIndex < bestPriority || (priorityIndex === bestPriority && distance < bestDistance)) {
       best = target;
       bestPriority = priorityIndex;
