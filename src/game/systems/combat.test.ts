@@ -53,12 +53,38 @@ describe('战斗系统', () => {
 
   it('攻击有冷却：按 reloadTicks 节奏开火', () => {
     const { game, a, d } = makePair('infantry', 'infantry', 1, 0); // 射程内
+    // 只让 a 负责本用例的射击节奏；d 保持可被攻击但暂不装填开火。
+    d.reloadLeft = 999;
     game.state.pendingCommands.push({ type: 'attack', playerId: 0, entityId: a.id, targetEntityId: d.id });
     for (let i = 0; i < 100; i++) game.update(TICK_MS);
     const shots = countShots(game.state);
     expect(shots).toBeGreaterThanOrEqual(3); // 30 tick 一发的节奏
     expect(shots).toBeLessThanOrEqual(5);
     expect(d.hp).toBeLessThan(50);
+  });
+
+  it('敌我单位进入射程后会自动互相锁定并开火', () => {
+    const { game, a, d } = makePair('tank', 'infantry', 2, 0);
+
+    game.update(TICK_MS);
+
+    expect(a.attackTargetId).toBe(d.id);
+    expect(d.attackTargetId).toBe(a.id);
+    expect(a.activity).toBe('attacking');
+    expect(d.activity).toBe('attacking');
+    expect(d.hp).toBeLessThan(game.state.defs.infantry.maxHp);
+    expect(a.hp).toBeLessThan(game.state.defs.tank.maxHp);
+    expect(countShots(game.state)).toBe(2);
+  });
+
+  it('坦克可以直接攻击敌方步兵并生成命中损坏事件', () => {
+    const { game, a, d } = makePair('tank', 'infantry', 1, 0);
+    game.state.pendingCommands.push({ type: 'attack', playerId: 0, entityId: a.id, targetEntityId: d.id });
+
+    game.update(TICK_MS);
+
+    expect(d.hp).toBeLessThan(game.state.defs.infantry.maxHp);
+    expect(game.state.events.some((event) => event.type === 'hit' && event.targetId === d.id)).toBe(true);
   });
 
   it('伤害按装甲修正：步兵打重甲坦克减半', () => {
@@ -115,13 +141,13 @@ describe('战斗系统', () => {
 
   it('攻击不存在的/友方目标视为无效命令', () => {
     const { game, a, d } = makePair('infantry', 'infantry', 1, 0);
+    d.ownerId = 0; // 场上没有敌人，避免自动接敌干扰无效命令断言。
     game.state.pendingCommands.push({ type: 'attack', playerId: 0, entityId: a.id, targetEntityId: 999 });
     game.update(TICK_MS);
     expect(a.activity).toBe('idle');
     expect(a.attackTargetId).toBeNull();
     // 攻击友方
     game.state.pendingCommands.push({ type: 'attack', playerId: 0, entityId: a.id, targetEntityId: d.id });
-    game.state.entities[d.id].ownerId = 0; // 变成友方
     game.update(TICK_MS);
     expect(a.attackTargetId).toBeNull();
     expect(a.activity).toBe('idle');

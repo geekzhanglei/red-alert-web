@@ -4,6 +4,9 @@ import { ArmorType } from '../data/units';
 import { WeaponDefinition } from '../data/units';
 import { tileAt } from '../state/map';
 
+/** 单位进入武器射程后自动接敌；主动攻击命令仍可追击射程外目标。 */
+const AUTO_ACQUIRE_BUFFER = 0.1;
+
 /** 取实体护甲类型：建筑查 buildingDefs，单位查 defs。 */
 function armorOf(state: GameState, e: EntityState): ArmorType {
   if (e.type === 'building') return state.buildingDefs[e.typeId].armor;
@@ -33,6 +36,18 @@ export function updateCombat(state: GameState, dt: number): void {
         e.command = target ? { type: 'attack', targetEntityId: target.id } : null;
       }
       if (e.attackTargetId == null) continue;
+    }
+
+    // 单位也会像红警中的警戒状态一样自动接敌：敌人进入武器射程就停下移动并锁定最近目标。
+    // 这样坦克/步兵靠近后会自然互射，无需玩家逐个右键点名。
+    if (e.type === 'unit' && e.attackTargetId == null && e.activity === 'idle') {
+      const target = findNearestEnemyInRange(state, e, weapon.range + AUTO_ACQUIRE_BUFFER);
+      if (target) {
+        e.attackTargetId = target.id;
+        e.command = { type: 'attack', targetEntityId: target.id };
+        e.path = [];
+        e.activity = 'attacking';
+      }
     }
 
     if (e.attackTargetId == null) {
@@ -147,5 +162,13 @@ function fire(state: GameState, e: EntityState, target: EntityState, weapon: Wea
   const newHp = target.hp - damage * (tgtDef.maxHp / effTargetMaxHp);
   target.hp = Math.round(newHp);
   state.events.push({ type: 'shot', fromX: e.x, fromY: e.y, toX: target.x, toY: target.y });
+  state.events.push({
+    type: 'hit',
+    targetId: target.id,
+    targetOwnerId: target.ownerId,
+    x: target.x,
+    y: target.y,
+    hpRatio: Math.max(0, Math.min(1, newHp / effTargetMaxHp)),
+  });
   if (target.hp <= 0) removeEntity(state, target.id);
 }

@@ -15,6 +15,14 @@ import type { UnitMotionVisual } from './unitAnimation';
  */
 export class UnitRenderer extends Phaser.GameObjects.Graphics {
   private shots: { x1: number; y1: number; x2: number; y2: number; bornAt: number }[] = [];
+  private hitEffects: {
+    targetId: number;
+    targetOwnerId: number;
+    x: number;
+    y: number;
+    hpRatio: number;
+    bornAt: number;
+  }[] = [];
   private pool: Phaser.GameObjects.Image[] = [];
   private glowPool: (Phaser.FX.Glow | null)[] = [];
   private groundLayer: Phaser.GameObjects.Graphics;
@@ -29,7 +37,7 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
   update(state: GameState, alpha: number, viewerPlayerId = 0): void {
     this.clear();
     this.groundLayer.clear();
-    this.consumeShotEvents(state);
+    this.consumeCombatEvents(state);
     this.drawTargetMarkers(state);
     this.drawMovePaths(state);
 
@@ -94,17 +102,21 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
       const selected = state.selectedEntityIds.includes(e.id);
       this.drawHpBar(e, state, px, py, selected);
     }
+    this.drawDamageEffects(state, viewerPlayerId);
   }
 
-  private consumeShotEvents(state: GameState): void {
+  private consumeCombatEvents(state: GameState): void {
     const now = this.scene.time.now;
     for (const ev of state.events) {
       if (ev.type === 'shot') {
         this.shots.push({ x1: ev.fromX, y1: ev.fromY, x2: ev.toX, y2: ev.toY, bornAt: now });
+      } else if (ev.type === 'hit') {
+        this.hitEffects.push({ ...ev, bornAt: now });
       }
     }
     state.events.length = 0;
     this.shots = this.shots.filter((s) => now - s.bornAt < 150);
+    this.hitEffects = this.hitEffects.filter((hit) => now - hit.bornAt < 520);
     for (const s of this.shots) {
       const fade = 1 - (now - s.bornAt) / 150;
       const from = gridToScreen(s.x1, s.y1);
@@ -112,6 +124,71 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
       this.lineStyle(1.5, 0xffd24a, fade);
       this.lineBetween(from.x, from.y, to.x, to.y);
     }
+  }
+
+  /**
+   * 受击反馈：血量下降后持续冒灰烟，命中瞬间再叠加闪光和扩散环。
+   * 这些效果只存在渲染层，不把时间戳写入 GameState，因此不会影响回放确定性。
+   */
+  private drawDamageEffects(state: GameState, viewerPlayerId: number): void {
+    const now = this.scene.time.now;
+    for (const id of state.entitiesOrder) {
+      const e = state.entities[id];
+      if (!e || !isVisibleTo(state, e, viewerPlayerId)) continue;
+      const def = e.type === 'unit' ? state.defs[e.typeId] : state.buildingDefs[e.typeId];
+      const maxHp = def.maxHp * e.hpMultiplier;
+      const ratio = Math.max(0, e.hp / maxHp);
+      if (ratio >= 0.82) continue;
+      this.drawSmoke(e, ratio, now);
+    }
+
+    for (const hit of this.hitEffects) {
+      if (!this.canShowDamageAt(state, hit.targetOwnerId, hit.x, hit.y, viewerPlayerId)) continue;
+      const age = now - hit.bornAt;
+      const progress = Math.min(1, age / 520);
+      const fade = 1 - progress;
+      const p = gridToScreen(hit.x, hit.y);
+      const pulse = 1 - Math.min(1, age / 120);
+      this.fillStyle(0xffe3a0, 0.16 * pulse);
+      this.fillCircle(p.x, p.y - 10, 5 + pulse * 5);
+      this.lineStyle(1.5, 0xffd35a, 0.68 * fade);
+      this.strokeCircle(p.x, p.y - 10, 8 + progress * 8);
+      for (let i = 0; i < 3; i++) {
+        const angle = i * 2.1 + hit.targetId * 0.37;
+        const drift = progress * (8 + i * 3);
+        const sx = p.x + Math.cos(angle) * drift;
+        const sy = p.y - 12 - progress * (10 + i * 4) + Math.sin(angle) * drift * 0.35;
+        this.fillStyle(0x59635d, 0.2 * fade);
+        this.fillEllipse(sx, sy, 5 + i * 2 + progress * 5, 3 + i + progress * 3);
+      }
+    }
+  }
+
+  private drawSmoke(e: EntityState, ratio: number, now: number): void {
+    const p = gridToScreen(e.x, e.y);
+    const severity = Phaser.Math.Clamp(1 - ratio, 0.18, 1);
+    const originY = p.y - (e.type === 'building' ? 34 : e.typeId === 'infantry' || e.typeId === 'rocketTrooper' ? 17 : 21);
+    const phase = now / 420 + e.id * 0.23;
+    for (let i = 0; i < 3; i++) {
+      const rise = ((phase + i * 0.32) % 1) * (8 + severity * 10);
+      const drift = Math.sin(phase * 2 + i * 1.7) * (2 + severity * 3);
+      this.fillStyle(i === 0 ? 0x26342f : 0x53605a, (0.16 + severity * 0.1) * (1 - i * 0.16));
+      this.fillEllipse(
+        p.x + drift + (i - 1) * 3,
+        originY - rise - i * 3,
+        7 + severity * 6 + i * 2,
+        4 + severity * 4 + i,
+      );
+    }
+    if (ratio < 0.45) {
+      this.fillStyle(0xff8a3d, 0.24 + severity * 0.14);
+      this.fillCircle(p.x + Math.sin(phase) * 2, originY + 2, 2.5 + severity * 2);
+    }
+  }
+
+  private canShowDamageAt(state: GameState, ownerId: number, x: number, y: number, viewerPlayerId: number): boolean {
+    if (ownerId === viewerPlayerId) return true;
+    return getFog(state.visibility, viewerPlayerId, Math.floor(x), Math.floor(y), state.map.width) === FOG_VISIBLE;
   }
 
   private drawHpBar(e: EntityState, state: GameState, px: number, py: number, selected: boolean): void {
