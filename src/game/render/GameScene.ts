@@ -187,6 +187,8 @@ export class GameScene extends Phaser.Scene {
     });
     window.addEventListener('keydown', (event) => {
       if (event.key !== 'Escape') return;
+      // 建造预览优先响应 Esc 取消，避免一次按键同时打开选项窗口。
+      if (this.optionsDialogEl?.hidden && this.placement.isActive()) return;
       event.preventDefault();
       this.setOptionsOpen(Boolean(this.optionsDialogEl?.hidden));
     });
@@ -196,6 +198,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.optionsDialogEl) return;
     this.optionsDialogEl.hidden = !open;
     if (open) {
+      if (this.placement.isActive()) this.placement.cancel();
       if (!this.loop.paused) {
         this.loop.togglePause();
         this.optionsPauseOwned = true;
