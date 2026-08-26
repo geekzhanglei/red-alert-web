@@ -1,7 +1,8 @@
 import { GameState } from '../state/GameState';
-import { EntityState, removeEntity } from '../state/entities';
+import { EntityState, occupy, removeEntity } from '../state/entities';
 import { ArmorType } from '../data/units';
 import { WeaponDefinition } from '../data/units';
+import { tileAt } from '../state/map';
 
 /** 取实体护甲类型：建筑查 buildingDefs，单位查 defs。 */
 function armorOf(state: GameState, e: EntityState): ArmorType {
@@ -95,17 +96,44 @@ function findNearestEnemyInRange(state: GameState, source: EntityState, range: n
   return best;
 }
 
-/** 直线追入射程边缘（不寻路：战斗追击保持简单，寻路留给 move 命令）。 */
+/**
+ * 追入射程边缘时只沿一个逻辑轴移动。
+ * 普通移动由四方向 A* 保证不斜走；战斗追击也必须遵守同一规则，不能因为直接追击又出现对角漂移。
+ */
 function chase(state: GameState, e: EntityState, target: EntityState, range: number, dt: number): void {
   const def = state.defs[e.typeId];
   const dx = target.x - e.x;
   const dy = target.y - e.y;
   const dist = Math.hypot(dx, dy);
   if (dist <= range) return;
-  const step = Math.min(def.speed * dt, dist - range);
-  e.x += (dx / dist) * step;
-  e.y += (dy / dist) * step;
-  e.facing = Math.atan2(dy, dx);
+  const moveX = Math.abs(dx) >= Math.abs(dy);
+  const otherDelta = moveX ? Math.abs(dy) : Math.abs(dx);
+  // 固定另一轴后，当前轴最多靠近到圆形射程边缘；这样最后不会冲进目标格。
+  const maxAxisDelta = otherDelta >= range ? 0 : Math.sqrt(Math.max(0, range * range - otherDelta * otherDelta));
+  const axisDelta = moveX ? Math.abs(dx) : Math.abs(dy);
+  const reduction = Math.max(0, axisDelta - maxAxisDelta);
+  const step = Math.min(def.speed * dt, reduction);
+  if (step <= 0) return;
+
+  const nextX = moveX ? e.x + Math.sign(dx) * step : e.x;
+  const nextY = moveX ? e.y : e.y + Math.sign(dy) * step;
+  const nextTile = tileAt(state.map, Math.floor(nextX), Math.floor(nextY));
+  if (!nextTile || (nextTile.occupiedBy != null && nextTile.occupiedBy !== e.id)) return;
+  e.x = nextX;
+  e.y = nextY;
+  e.facing = moveX ? (dx >= 0 ? 0 : Math.PI) : dy >= 0 ? Math.PI / 2 : -Math.PI / 2;
+  updateChaseOccupancy(state, e);
+}
+
+function updateChaseOccupancy(state: GameState, e: EntityState): void {
+  const tx = Math.floor(e.x);
+  const ty = Math.floor(e.y);
+  if (tx === e.tileX && ty === e.tileY) return;
+  const old = tileAt(state.map, e.tileX, e.tileY);
+  if (old && old.occupiedBy === e.id) old.occupiedBy = null;
+  e.tileX = tx;
+  e.tileY = ty;
+  occupy(state, e, [{ x: tx, y: ty }]);
 }
 
 /** 命中即结算：伤害按装甲修正 × 攻击方升级倍率；hp ≤ 0 走统一死亡清理；同时产生瞬态弹道事件供渲染。 */

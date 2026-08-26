@@ -3,6 +3,7 @@ import { TICK_MS } from '../core/GameLoop';
 import { Game } from '../core/Game';
 import { createInitialGameState } from '../state/GameState';
 import { spawnBuilding, spawnUnit } from '../state/entities';
+import { updateCombat } from './combat';
 
 function countShots(state: import('../state/GameState').GameState): number {
   return state.events.filter((ev) => ev.type === 'shot').length;
@@ -22,6 +23,32 @@ describe('战斗系统', () => {
     for (let i = 0; i < 60; i++) game.update(TICK_MS);
     expect(countShots(game.state)).toBeGreaterThan(0);
     expect(Math.hypot(d.x - a.x, d.y - a.y)).toBeLessThanOrEqual(2.2); // 停在射程边缘
+  });
+
+  it('战斗追击也只沿单一坐标轴移动，不产生斜向位移', () => {
+    const { game, a, d } = makePair('tank', 'infantry', 4, 3);
+    a.attackTargetId = d.id;
+    a.activity = 'attacking';
+    const before = { x: a.x, y: a.y };
+
+    updateCombat(game.state, TICK_MS / 1000);
+
+    expect(a.x === before.x || a.y === before.y).toBe(true);
+  });
+
+  it('不同作战单位使用各自的攻击力', () => {
+    const damage = (attackerType: string): number => {
+      const { game, a, d } = makePair(attackerType, 'infantry');
+      a.attackTargetId = d.id;
+      a.activity = 'attacking';
+      updateCombat(game.state, TICK_MS / 1000);
+      return 50 - d.hp;
+    };
+
+    const values = ['infantry', 'tank', 'rocketTrooper', 'scout', 'artillery', 'heavyTank'].map(damage);
+    expect(new Set(values).size).toBe(values.length);
+    expect(damage('artillery')).toBeGreaterThan(damage('infantry'));
+    expect(damage('rocketTrooper')).toBeGreaterThan(damage('scout'));
   });
 
   it('攻击有冷却：按 reloadTicks 节奏开火', () => {

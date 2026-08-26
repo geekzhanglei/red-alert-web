@@ -13,7 +13,6 @@ import { CameraController } from '../input/CameraController';
 import { SelectionController } from '../input/SelectionController';
 import { SquadController } from '../input/SquadController';
 import { BuildingPlacementController } from '../input/BuildingPlacementController';
-import { upgradeCost } from '../state/commands';
 import { canAfford } from '../state/players';
 import { Minimap } from './Minimap';
 import { ResultOverlay } from '../../ui/ResultOverlay';
@@ -58,7 +57,6 @@ export class GameScene extends Phaser.Scene {
   private selectionInfoEl: HTMLElement | null = null;
   private moneyEl: HTMLElement | null = null;
   private powerEl: HTMLElement | null = null;
-  private prodPanelEl: HTMLElement | null = null;
   private speedOverlayEl: HTMLElement | null = null;
   private buildButtons: HTMLButtonElement[] = [];
   private catalogTabs: HTMLButtonElement[] = [];
@@ -69,7 +67,6 @@ export class GameScene extends Phaser.Scene {
   private activeCatalogTab: CatalogTab = 'structures';
   private catalogStructureKey = '';
   private resultOverlay = new ResultOverlay();
-  private prodPanelStructureKey = '';
 
   constructor() {
     super('game');
@@ -130,8 +127,6 @@ export class GameScene extends Phaser.Scene {
     this.selectionInfoEl = document.getElementById('selection-info');
     this.moneyEl = document.getElementById('money');
     this.powerEl = document.getElementById('power-status');
-    this.prodPanelEl = document.getElementById('prod-panel');
-    this.prodPanelEl?.addEventListener('click', (event) => this.handleProductionClick(event));
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.updateTileInfo(p));
     this.wireBuildBar();
     this.wireCatalog();
@@ -204,7 +199,6 @@ export class GameScene extends Phaser.Scene {
     this.updateSelectionInfo();
     this.updateMoney();
     this.updatePower();
-    this.updateSelectionPanel();
     this.refreshCatalog();
     this.updateSpeedOverlay();
     this.resultOverlay.update(this.sim.state);
@@ -315,7 +309,8 @@ export class GameScene extends Phaser.Scene {
       .map((unitTypeId) => {
         const def = this.sim.state.defs[unitTypeId];
         const spriteUrl = UNIT_SPRITE_URLS[unitTypeId];
-        return `<button type="button" class="catalog-unit" data-train-global="${unitTypeId}"><span class="catalog-thumb" style="--catalog-image:url('${spriteUrl}')" aria-hidden="true"></span><span class="catalog-item-copy"><strong>${def.name}</strong><small>$${def.cost}</small></span><span class="catalog-queue-count" data-catalog-queue-count hidden></span><span class="catalog-progress" data-catalog-progress hidden><i></i><b></b></span></button>`;
+        const combatLabel = def.weapon ? `攻击 ${def.weapon.damage} · 射程 ${def.weapon.range}` : '无攻击';
+        return `<button type="button" class="catalog-unit" data-train-global="${unitTypeId}" title="${def.name} · ${combatLabel} · 生命 ${def.maxHp}"><span class="catalog-thumb" style="--catalog-image:url('${spriteUrl}')" aria-hidden="true"></span><span class="catalog-item-copy"><strong>${def.name}</strong><small>$${def.cost} · ${combatLabel}</small></span><span class="catalog-queue-count" data-catalog-queue-count hidden></span><span class="catalog-progress" data-catalog-progress hidden><i></i><b></b></span></button>`;
       })
       .join('');
   }
@@ -413,91 +408,6 @@ export class GameScene extends Phaser.Scene {
       gauge.dataset.state = player.powerConsumed > player.powerProduced ? 'short' : 'ok';
       gauge.setAttribute('aria-valuenow', String(Math.round(supply)));
       gauge.setAttribute('aria-valuetext', `发电 ${player.powerProduced}，消耗 ${player.powerConsumed}`);
-    }
-  }
-
-  /** 经典 RTS 左侧栏：选中实体时固定显示状态、生产页签、队列环形进度和升级卡片。 */
-  private updateSelectionPanel(): void {
-    if (!this.prodPanelEl) return;
-    const state = this.sim.state;
-    const sel = state.selectedEntityIds;
-    const player = state.players[PLAYER_ID];
-    const items = sel.map((id) => state.entities[id]).filter((e): e is EntityState => Boolean(e));
-
-    if (items.length === 0) {
-      this.prodPanelEl.innerHTML = '';
-      this.prodPanelStructureKey = '';
-      this.prodPanelEl.style.display = 'none';
-      return;
-    }
-    this.prodPanelEl.style.display = '';
-
-    // 选择状态只在内容变化时重建，生产目录由固定侧栏独立维护。
-    const structureKey = `${sel.join(',')}|${player.money}|${player.powerProduced}|${player.powerConsumed}|${
-      items.map((e) => `${e.id}:${e.type}:${e.typeId}:${Math.ceil(e.hp)}:${e.upgraded}`).join(';')
-    }`;
-    if (structureKey !== this.prodPanelStructureKey) {
-      this.prodPanelEl.innerHTML = this.renderSelectionPanel(state, items);
-      this.prodPanelStructureKey = structureKey;
-    }
-
-    this.prodPanelEl.querySelectorAll<HTMLButtonElement>('button[data-upgrade]').forEach((btn) => {
-      btn.disabled = player.money < Number(btn.dataset.cost ?? '0');
-    });
-  }
-
-  private renderSelectionPanel(state: GameState, items: EntityState[]): string {
-    const sample = items[0];
-    const friendly = sample.ownerId === PLAYER_ID;
-    const def = sample.type === 'unit' ? state.defs[sample.typeId] : state.buildingDefs[sample.typeId];
-    const maxHp = def.maxHp * sample.hpMultiplier;
-    const hpRatio = Math.max(0, Math.min(100, (sample.hp / maxHp) * 100));
-    const title = sample.type === 'unit' ? def.name : def.name;
-    const countLabel = items.length > 1 ? ` ×${items.length}` : '';
-    let html = `<div class="selection-panel-card selection-panel-compact">
-      <div class="selection-panel-heading"><div><small>SELECTED ${sample.type === 'unit' ? 'UNIT' : 'STRUCTURE'}</small><h2>${title}${countLabel}</h2></div><span class="selection-badge">${sample.type === 'unit' ? 'UNIT' : 'BASE'}</span></div>
-      <div class="selection-health"><div><span>完整度</span><b>${Math.ceil(sample.hp)} / ${Math.round(maxHp)}</b></div><i><em style="width:${hpRatio}%"></em></i></div>
-      <div class="selection-compact-meta">`;
-    if (sample.type === 'unit') {
-      const unitDef = state.defs[sample.typeId];
-      const weaponLabel = unitDef.weapon ? ` · 伤害 ${(
-        unitDef.weapon.damage * sample.damageMultiplier
-      ).toFixed(1)}` : '';
-      html += `${this.activityLabel(sample.activity)} · 护甲 ${unitDef.armor}${weaponLabel}`;
-    } else {
-      const buildingDef = state.buildingDefs[sample.typeId];
-      html += `${buildingDef.footprint.w}×${buildingDef.footprint.h} 格 · 电力 +${
-        buildingDef.powerProvided + sample.powerBonus
-      } / -${buildingDef.powerConsumed}`;
-    }
-    html += `</div>`;
-
-    if (friendly) {
-      const cost = upgradeCost(state, sample);
-      if (sample.upgraded) {
-        html += `<section class="upgrade-card is-complete"><div class="upgrade-ring" style="--progress:100%"><span>UP</span></div><div><small>升级状态</small><strong>已升级 · 战术强化完成</strong></div><b>✓</b></section>`;
-      } else {
-        html += `<section class="upgrade-card"><div class="upgrade-ring" style="--progress:0%"><span>UP</span></div><div><small>升级状态</small><strong>可进行战术升级</strong><em>强化生命、伤害或解锁单位</em></div><button type="button" class="upgrade-btn" data-upgrade="${sample.id}" data-cost="${cost}">升级 <b>$${cost}</b></button></section>`;
-      }
-    } else {
-      html += `<div class="enemy-status"><span>敌方目标</span><b>不可操作</b></div>`;
-    }
-    return `${html}</div>`;
-  }
-
-  private activityLabel(a: string): string {
-    return a === 'idle' ? '待机' : a === 'moving' ? '移动中' : a === 'attacking' ? '战斗中' : a;
-  }
-
-  private handleProductionClick(event: Event): void {
-    const target = event.target as HTMLElement;
-    const upBtn = target.closest<HTMLButtonElement>('button[data-upgrade]');
-    if (upBtn) {
-      this.sim.state.pendingCommands.push({
-        type: 'upgrade',
-        playerId: PLAYER_ID,
-        entityId: Number(upBtn.dataset.upgrade),
-      });
     }
   }
 

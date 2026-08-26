@@ -11,21 +11,15 @@ import { FOG_VISIBLE, getFog } from '../state/visibility';
  */
 export class BuildingRenderer extends Phaser.GameObjects.Graphics {
   private pool: Phaser.GameObjects.Image[] = [];
-  /** 直接作用在建筑贴图 alpha 上的光效，避免把逻辑 footprint 误画成四块方格。 */
-  private glowPool: (Phaser.FX.Glow | null)[] = [];
-  /** 置于贴图下方的选中底光，负责让高亮从建筑边缘透出。 */
-  private selectionGlow: Phaser.GameObjects.Graphics;
 
   constructor(scene: Phaser.Scene) {
     super(scene);
     this.setDepth(21);
     scene.add.existing(this);
-    this.selectionGlow = scene.add.graphics().setDepth(19);
   }
 
   update(state: GameState, viewerPlayerId = 0): void {
     this.clear();
-    this.selectionGlow.clear();
     const drawable: EntityState[] = [];
     for (const id of state.entitiesOrder) {
       const e = state.entities[id];
@@ -37,18 +31,13 @@ export class BuildingRenderer extends Phaser.GameObjects.Graphics {
 
     while (this.pool.length < drawable.length) {
       const img = this.scene.add.image(0, 0, '__DEFAULT').setDepth(20);
-      const glow = img.preFX?.addGlow(0x55caff, 3.5, 0.38, false) ?? null;
-      glow?.setActive(false);
       this.pool.push(img);
-      this.glowPool.push(glow);
     }
     for (let i = 0; i < this.pool.length; i++) {
       const img = this.pool[i];
-      const glow = this.glowPool[i];
       if (i < drawable.length) {
         const e = drawable[i];
         const def = state.buildingDefs[e.typeId];
-        const selected = state.selectedEntityIds.includes(e.id);
         const s = gridToScreen(e.x, e.y);
         const key = textureKeyFor(e.typeId, e.ownerId, 'building');
         if (this.scene.textures.exists(key)) {
@@ -61,42 +50,19 @@ export class BuildingRenderer extends Phaser.GameObjects.Graphics {
           if (e.ownerId === 1) img.setTint(ENEMY_TINT);
           else img.clearTint();
           img.setPosition(s.x, s.y);
-          glow?.setActive(selected);
         } else {
           img.setVisible(false);
-          glow?.setActive(false);
         }
       } else {
         img.setVisible(false);
-        glow?.setActive(false);
       }
     }
 
-    // 选中边框与血条。建筑满血时仅在选中状态展示血条，避免地图信息过载。
+    // 原版选中建筑不弹出侧栏详情卡，直接在地图实体上显示生命条。
     for (const e of drawable) {
       const selected = state.selectedEntityIds.includes(e.id);
-      if (selected) this.drawBuildingSelection(e, state.buildingDefs[e.typeId]);
       this.drawBuildingHp(state, e, selected);
     }
-  }
-
-  private drawBuildingSelection(e: EntityState, def: GameState['buildingDefs'][string]): void {
-    // 选中反馈跟随实际贴图底座，而不是按逻辑格子画菱形；这样不会再出现四块矩形。
-    const s = gridToScreen(e.x, e.y);
-    const size = ORIGINAL_BUILDING_SIZE[e.typeId] ?? {
-      w: Math.max(def.footprint.w, 1) * 64,
-      h: Math.max(def.footprint.h, 1) * 48,
-    };
-    const pulse = 0.16 + Math.sin(this.scene.time.now / 220) * 0.035;
-    const width = size.w * 0.86;
-    const height = Math.max(16, size.h * 0.2);
-    const y = s.y + size.h * 0.34;
-    this.selectionGlow.fillStyle(0x168dff, pulse);
-    this.selectionGlow.fillEllipse(s.x, y, width, height);
-    this.selectionGlow.lineStyle(7, 0x168dff, 0.16);
-    this.selectionGlow.strokeEllipse(s.x, y, width + 8, height + 5);
-    this.selectionGlow.lineStyle(1.5, 0x82ddff, 0.9);
-    this.selectionGlow.strokeEllipse(s.x, y, width, height);
   }
 
   private drawBuildingHp(state: GameState, e: EntityState, selected: boolean): void {
@@ -104,12 +70,14 @@ export class BuildingRenderer extends Phaser.GameObjects.Graphics {
     const maxHp = def.maxHp * e.hpMultiplier;
     if (e.hp >= maxHp && !selected) return;
     const s = gridToScreen(e.x, e.y);
+    const spriteSize = ORIGINAL_BUILDING_SIZE[e.typeId] ?? { w: def.footprint.w * 64, h: def.footprint.h * 48 };
     const ratio = Math.max(0, e.hp / maxHp);
-    const w = def.footprint.w * 24;
+    const w = Math.max(28, Math.min(96, spriteSize.w * 0.5));
+    const y = s.y - spriteSize.h * 0.5 - 7;
     this.fillStyle(0x111, 0.7);
-    this.fillRect(s.x - w / 2, s.y - 16, w, 3);
+    this.fillRect(s.x - w / 2, y, w, 4);
     this.fillStyle(ratio > 0.5 ? 0x4caf50 : ratio > 0.25 ? 0xffa726 : 0xe04848, 1);
-    this.fillRect(s.x - w / 2, s.y - 16, w * ratio, 3);
+    this.fillRect(s.x - w / 2, y, w * ratio, 4);
   }
 }
 
