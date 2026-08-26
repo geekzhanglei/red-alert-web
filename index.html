@@ -74,6 +74,11 @@
               <input id="mouse-sensitivity" type="range" min="50" max="200" value="100" step="10" />
             </label>
             <p class="options-help">调整中键拖拽、边缘滚屏和滚轮缩放的速度。设置会自动保存到本机。</p>
+            <label class="options-range" for="master-volume">
+              <span><b>战场音量</b><output id="master-volume-value" for="master-volume">42%</output></span>
+              <input id="master-volume" type="range" min="0" max="100" value="42" step="5" />
+            </label>
+            <p class="options-help">控制开火、命中、建造和指令音效；首次点击战场后自动启用。</p>
             <div class="options-save-grid" aria-label="战场存档">
               <button id="save-battlefield" type="button">保存战场</button>
               <button id="load-battlefield" type="button">读取存档</button>

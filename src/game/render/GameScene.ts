@@ -17,6 +17,7 @@ import { canAfford, canSustainBuilding } from '../state/players';
 import { Minimap } from './Minimap';
 import { ResultOverlay } from '../../ui/ResultOverlay';
 import { BUILDING_SPRITE_URLS, loadAllSprites, UNIT_SPRITE_URLS } from '../../assets/loadSprites';
+import { GameAudio } from '../audio/GameAudio';
 import {
   getBattlefieldInfo,
   loadBattlefield,
@@ -77,7 +78,10 @@ export class GameScene extends Phaser.Scene {
   private mouseSensitivityEl: HTMLInputElement | null = null;
   private mouseSensitivityValueEl: HTMLOutputElement | null = null;
   private optionsSaveStatusEl: HTMLElement | null = null;
+  private masterVolumeEl: HTMLInputElement | null = null;
+  private masterVolumeValueEl: HTMLOutputElement | null = null;
   private optionsPauseOwned = false;
+  private audio!: GameAudio;
 
   constructor() {
     super('game');
@@ -88,6 +92,7 @@ export class GameScene extends Phaser.Scene {
     const resumeRequested = Boolean((window as unknown as { __resumeBattlefield?: boolean }).__resumeBattlefield);
     const restored = resumeRequested ? loadBattlefield() : null;
     this.sim = new Game(restored ?? createInitialGameState({ difficulty: diff }));
+    this.audio = new GameAudio();
 
     // 预加载原创贴图（docs/01-architecture.md 决策三）
     loadAllSprites(this);
@@ -178,14 +183,19 @@ export class GameScene extends Phaser.Scene {
     this.mouseSensitivityEl = document.getElementById('mouse-sensitivity') as HTMLInputElement | null;
     this.mouseSensitivityValueEl = document.getElementById('mouse-sensitivity-value') as HTMLOutputElement | null;
     this.optionsSaveStatusEl = document.getElementById('options-save-status');
+    this.masterVolumeEl = document.getElementById('master-volume') as HTMLInputElement | null;
+    this.masterVolumeValueEl = document.getElementById('master-volume-value') as HTMLOutputElement | null;
 
     const initialPercent = Math.round(this.cameraControl.getSensitivity() * 100);
     if (this.mouseSensitivityEl) this.mouseSensitivityEl.value = String(initialPercent);
     if (this.mouseSensitivityValueEl) this.mouseSensitivityValueEl.value = `${initialPercent}%`;
+    const initialVolume = Math.round(this.audio.getVolume() * 100);
+    if (this.masterVolumeEl) this.masterVolumeEl.value = String(initialVolume);
+    if (this.masterVolumeValueEl) this.masterVolumeValueEl.value = `${initialVolume}%`;
 
-    document.getElementById('open-options')?.addEventListener('click', () => this.setOptionsOpen(true));
-    document.getElementById('close-options')?.addEventListener('click', () => this.setOptionsOpen(false));
-    document.getElementById('resume-game')?.addEventListener('click', () => this.setOptionsOpen(false));
+    document.getElementById('open-options')?.addEventListener('click', () => { this.audio.playUi(); this.setOptionsOpen(true); });
+    document.getElementById('close-options')?.addEventListener('click', () => { this.audio.playUi(); this.setOptionsOpen(false); });
+    document.getElementById('resume-game')?.addEventListener('click', () => { this.audio.playUi(); this.setOptionsOpen(false); });
     document.getElementById('save-battlefield')?.addEventListener('click', () => {
       const info = saveBattlefield(this.sim.state);
       if (this.optionsSaveStatusEl) {
@@ -205,6 +215,11 @@ export class GameScene extends Phaser.Scene {
         return;
       }
       window.location.reload();
+    });
+    this.masterVolumeEl?.addEventListener('input', () => {
+      const percent = Phaser.Math.Clamp(Number(this.masterVolumeEl?.value ?? 42), 0, 100);
+      this.audio.setVolume(percent / 100);
+      if (this.masterVolumeValueEl) this.masterVolumeValueEl.value = `${percent}%`;
     });
     this.optionsDialogEl?.addEventListener('click', (event) => {
       if (event.target === this.optionsDialogEl) this.setOptionsOpen(false);
@@ -289,6 +304,8 @@ export class GameScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     this.loop.frame(delta);
+    this.audio.observeState(this.sim.state);
+    this.audio.consumeEvents(this.sim.state.events);
     // 建筑先画（背景），单位后画（前景角色），与等距遮挡一致
     this.buildings.update(this.sim.state, PLAYER_ID);
     this.units.update(this.sim.state, this.loop.alpha, PLAYER_ID);

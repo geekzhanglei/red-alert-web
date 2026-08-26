@@ -4,6 +4,7 @@ import { TILE_H, TILE_W, gridToScreen } from './isometric';
 import { GameState } from '../state/GameState';
 import { FOG_EXPLORED, FOG_UNEXPLORED, FOG_VISIBLE, getFog } from '../state/visibility';
 import { TERRAIN_TEXTURE_KEY } from '../../assets/loadSprites';
+import { mulberry32 } from '../core/random';
 
 /**
  * 地图渲染层（贴图版）：每格一张贴图，雾遮罩仍用 Graphics（覆盖层）。
@@ -15,10 +16,12 @@ export class MapRenderer {
   private oreOverlays = new Map<number, Phaser.GameObjects.Image>();
   private oreDisplayAmounts = new Map<number, number>();
   private fog: Phaser.GameObjects.Graphics;
+  private terrainDetails: Phaser.GameObjects.Graphics;
   private ready = false;
 
   constructor(scene: Phaser.Scene) {
     this.fog = scene.add.graphics().setDepth(50);
+    this.terrainDetails = scene.add.graphics().setDepth(0.5);
   }
 
   init(scene: Phaser.Scene, map: MapState): void {
@@ -49,11 +52,67 @@ export class MapRenderer {
         }
       }
     }
+    this.drawTerrainDetails(map);
     this.ready = true;
   }
 
   isReady(): boolean {
     return this.ready;
+  }
+
+  /**
+   * 地形贴图是低频静态层，额外画一层确定性的草叶、岸线和岩屑，
+   * 让重复的菱形贴图拥有远近节奏，又不会把细节放进每帧渲染循环。
+   */
+  private drawTerrainDetails(map: MapState): void {
+    const g = this.terrainDetails;
+    g.clear();
+    for (let y = 0; y < map.height; y++) {
+      for (let x = 0; x < map.width; x++) {
+        const tile = map.tiles[y * map.width + x];
+        const center = gridToScreen(x, y);
+        const random = mulberry32((map.seed ^ Math.imul(x + 101, 83492791) ^ Math.imul(y + 313, 19349663)) >>> 0);
+        const jitter = () => random() - 0.5;
+        if (tile.terrain === 'grass') {
+          // 很低对比度的色块变化打破“同一张贴图平铺”的棋盘感，同时保留可读的格线。
+          const wash = random() > 0.5 ? 0x7da55e : 0x345e3f;
+          g.fillStyle(wash, 0.075);
+          g.fillPoints([
+            new Phaser.Geom.Point(center.x, center.y - TILE_H / 2),
+            new Phaser.Geom.Point(center.x + TILE_W / 2, center.y),
+            new Phaser.Geom.Point(center.x, center.y + TILE_H / 2),
+            new Phaser.Geom.Point(center.x - TILE_W / 2, center.y),
+          ], true);
+          for (let i = 0; i < 2; i++) {
+            const px = center.x + jitter() * 38;
+            const py = center.y + jitter() * 14;
+            g.lineStyle(0.8, i === 0 ? 0x9fbd62 : 0x315f3e, 0.22);
+            g.lineBetween(px, py + 2, px + jitter() * 2, py - 2 - random() * 2);
+          }
+          if (random() > 0.76) {
+            g.fillStyle(0xc7b66a, 0.18);
+            g.fillCircle(center.x + jitter() * 42, center.y + jitter() * 13, 0.8 + random() * 0.8);
+          }
+        } else if (tile.terrain === 'water') {
+          const shift = jitter() * 5;
+          g.lineStyle(0.8, 0x9bd5e4, 0.2);
+          g.beginPath();
+          g.moveTo(center.x - 21, center.y + shift);
+          g.lineTo(center.x - 7, center.y - 3 + shift);
+          g.lineTo(center.x + 7, center.y + shift);
+          g.lineTo(center.x + 21, center.y - 3 + shift);
+          g.strokePath();
+        } else if (tile.terrain === 'rock') {
+          g.fillStyle(0xadb0a1, 0.28);
+          g.fillPoints([
+            new Phaser.Geom.Point(center.x - 9 + jitter() * 5, center.y + 2 + jitter() * 4),
+            new Phaser.Geom.Point(center.x - 3 + jitter() * 4, center.y - 3 + jitter() * 3),
+            new Phaser.Geom.Point(center.x + 3 + jitter() * 4, center.y + jitter() * 3),
+            new Phaser.Geom.Point(center.x + jitter() * 6, center.y + 5 + jitter() * 3),
+          ], true);
+        }
+      }
+    }
   }
 
   /** 矿车采集会真实改变贴图：储量越少，矿石簇越小、越暗，耗尽后只留下草地。 */

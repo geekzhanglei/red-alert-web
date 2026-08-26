@@ -3,9 +3,25 @@ import { createInitialGameState } from './GameState';
 import { spawnUnit } from './entities';
 import { processCommands } from './commands';
 
+function flatMap(width: number, height: number) {
+  return {
+    width,
+    height,
+    seed: 0,
+    tiles: Array.from({ length: width * height }, () => ({
+      terrain: 'grass' as const,
+      walkable: true,
+      buildable: true,
+      oreAmount: 0,
+      occupiedBy: null,
+    })),
+  };
+}
+
 describe('命令系统', () => {
   it('入队命令在下一个 tick 应用，实体命令不含 playerId，日志含 playerId', () => {
     const s = createInitialGameState({ testUnits: false });
+    s.map = flatMap(12, 12);
     const e = spawnUnit(s, 'infantry', 0, 5, 5);
     s.pendingCommands.push({ type: 'move', playerId: 3, entityId: e.id, targetX: 8, targetY: 5 });
     processCommands(s);

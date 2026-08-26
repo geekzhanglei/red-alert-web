@@ -15,7 +15,8 @@ export type GameEvent =
       x: number;
       y: number;
       hpRatio: number;
-    };
+    }
+  | { type: 'destroy'; targetId: number; x: number; y: number };
 
 /** 玩家资源状态：资金由经济系统唯一写入口修改（docs/06-economy.md §A1）。 */
 export interface PlayerState {

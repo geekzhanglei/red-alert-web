@@ -6,6 +6,21 @@ import { spawnUnit } from '../state/entities';
 import { updateVisibility } from '../systems/visibility';
 import { FOG_EXPLORED, FOG_VISIBLE, getFog } from '../state/visibility';
 
+function flatMap(width: number, height: number) {
+  return {
+    width,
+    height,
+    seed: 0,
+    tiles: Array.from({ length: width * height }, () => ({
+      terrain: 'grass' as const,
+      walkable: true,
+      buildable: true,
+      oreAmount: 0,
+      occupiedBy: null,
+    })),
+  };
+}
+
 describe('战争迷雾', () => {
   it('初始所有格对所有玩家都是 UNEXPLORED', () => {
     const s = createInitialGameState({ testUnits: false });
@@ -50,6 +65,7 @@ describe('战争迷雾', () => {
 
   it('可见性不参与逻辑：雾里的敌人照常移动、战斗', () => {
     const game = new Game(createInitialGameState({ testUnits: false }));
+    game.state.map = flatMap(64, 64);
     const own = spawnUnit(game.state, 'infantry', 0, 5, 5);
     const enemy = spawnUnit(game.state, 'infantry', 1, 50, 50); // 玩家视野外
     game.state.pendingCommands.push({ type: 'move', playerId: 0, entityId: enemy.id, targetX: 60, targetY: 50 });
