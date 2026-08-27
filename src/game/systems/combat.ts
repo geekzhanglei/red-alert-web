@@ -168,7 +168,7 @@ function fire(state: GameState, e: EntityState, target: EntityState, weapon: Wea
   // 等比例缩放：hp / effMaxHp = hp - damage / defMaxHp
   const newHp = target.hp - damage * (tgtDef.maxHp / effTargetMaxHp);
   target.hp = Math.round(newHp);
-  state.events.push({ type: 'shot', fromX: e.x, fromY: e.y, toX: target.x, toY: target.y });
+  state.events.push({ type: 'shot', fromX: e.x, fromY: e.y, toX: target.x, toY: target.y, sourceTypeId: e.typeId });
   state.events.push({
     type: 'hit',
     targetId: target.id,
@@ -176,9 +176,17 @@ function fire(state: GameState, e: EntityState, target: EntityState, weapon: Wea
     x: target.x,
     y: target.y,
     hpRatio: Math.max(0, Math.min(1, newHp / effTargetMaxHp)),
+    targetTypeId: target.typeId,
   });
   if (target.hp <= 0) {
-    state.events.push({ type: 'destroy', targetId: target.id, targetOwnerId: target.ownerId, x: target.x, y: target.y });
+    state.events.push({
+      type: 'destroy',
+      targetId: target.id,
+      targetOwnerId: target.ownerId,
+      targetTypeId: target.typeId,
+      x: target.x,
+      y: target.y,
+    });
     removeEntity(state, target.id);
   }
 }

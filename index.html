@@ -79,6 +79,16 @@
               <input id="master-volume" type="range" min="0" max="100" value="42" step="5" />
             </label>
             <p class="options-help">控制开火、命中、建造和指令音效；首次点击战场后自动启用。</p>
+            <label class="options-range" for="music-volume">
+              <span><b>战场音乐</b><output id="music-volume-value" for="music-volume">24%</output></span>
+              <input id="music-volume" type="range" min="0" max="100" value="24" step="5" />
+            </label>
+            <p class="options-help">原创战术合成循环，独立控制旋律和低音层。</p>
+            <label class="options-range" for="ambient-volume">
+              <span><b>环境声</b><output id="ambient-volume-value" for="ambient-volume">18%</output></span>
+              <input id="ambient-volume" type="range" min="0" max="100" value="18" step="5" />
+            </label>
+            <p class="options-help">风声、电力嗡鸣和采矿等低频环境反馈。</p>
             <div class="options-save-grid" aria-label="战场存档">
               <button id="save-battlefield" type="button">保存战场</button>
               <button id="load-battlefield" type="button">读取存档</button>

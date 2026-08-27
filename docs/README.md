@@ -21,6 +21,7 @@
 10. [09-save-replay.md](./09-save-replay.md) — 阶段八：存档、回放与性能优化。
 11. [10-selection-panel.md](./10-selection-panel.md) — 选中后属性/升级面板（试玩化：单选 1 实体显示属性与升级，多选按类型分组）。
 12. [product-roadmap.md](./product-roadmap.md) — 从试玩原型到可重复游玩的 RTS 产品路线图。
+13. [11-audio-design.md](./11-audio-design.md) — 音效、环境声、战场音乐的分层设计与素材许可证边界。
 
 ## 每篇文档的固定结构
 

@@ -7,7 +7,7 @@ import { createVisibility, VisibilityState } from './visibility';
 
 /** 瞬态渲染事件：系统在 tick 内产生，渲染层读取后清空；不参与回放/存档。 */
 export type GameEvent =
-  | { type: 'shot'; fromX: number; fromY: number; toX: number; toY: number }
+  | { type: 'shot'; fromX: number; fromY: number; toX: number; toY: number; sourceTypeId?: string }
   | {
       type: 'hit';
       targetId: number;
@@ -15,8 +15,9 @@ export type GameEvent =
       x: number;
       y: number;
       hpRatio: number;
+      targetTypeId?: string;
     }
-  | { type: 'destroy'; targetId: number; targetOwnerId: number; x: number; y: number };
+  | { type: 'destroy'; targetId: number; targetOwnerId: number; x: number; y: number; targetTypeId?: string };
 
 /** 玩家资源状态：资金由经济系统唯一写入口修改（docs/06-economy.md §A1）。 */
 export interface PlayerState {

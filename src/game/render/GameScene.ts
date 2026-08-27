@@ -80,6 +80,10 @@ export class GameScene extends Phaser.Scene {
   private optionsSaveStatusEl: HTMLElement | null = null;
   private masterVolumeEl: HTMLInputElement | null = null;
   private masterVolumeValueEl: HTMLOutputElement | null = null;
+  private musicVolumeEl: HTMLInputElement | null = null;
+  private musicVolumeValueEl: HTMLOutputElement | null = null;
+  private ambientVolumeEl: HTMLInputElement | null = null;
+  private ambientVolumeValueEl: HTMLOutputElement | null = null;
   private optionsPauseOwned = false;
   private audio!: GameAudio;
 
@@ -187,6 +191,10 @@ export class GameScene extends Phaser.Scene {
     this.optionsSaveStatusEl = document.getElementById('options-save-status');
     this.masterVolumeEl = document.getElementById('master-volume') as HTMLInputElement | null;
     this.masterVolumeValueEl = document.getElementById('master-volume-value') as HTMLOutputElement | null;
+    this.musicVolumeEl = document.getElementById('music-volume') as HTMLInputElement | null;
+    this.musicVolumeValueEl = document.getElementById('music-volume-value') as HTMLOutputElement | null;
+    this.ambientVolumeEl = document.getElementById('ambient-volume') as HTMLInputElement | null;
+    this.ambientVolumeValueEl = document.getElementById('ambient-volume-value') as HTMLOutputElement | null;
 
     const initialPercent = Math.round(this.cameraControl.getSensitivity() * 100);
     if (this.mouseSensitivityEl) this.mouseSensitivityEl.value = String(initialPercent);
@@ -194,6 +202,12 @@ export class GameScene extends Phaser.Scene {
     const initialVolume = Math.round(this.audio.getVolume() * 100);
     if (this.masterVolumeEl) this.masterVolumeEl.value = String(initialVolume);
     if (this.masterVolumeValueEl) this.masterVolumeValueEl.value = `${initialVolume}%`;
+    const initialMusicVolume = Math.round(this.audio.getMusicVolume() * 100);
+    if (this.musicVolumeEl) this.musicVolumeEl.value = String(initialMusicVolume);
+    if (this.musicVolumeValueEl) this.musicVolumeValueEl.value = `${initialMusicVolume}%`;
+    const initialAmbientVolume = Math.round(this.audio.getAmbientVolume() * 100);
+    if (this.ambientVolumeEl) this.ambientVolumeEl.value = String(initialAmbientVolume);
+    if (this.ambientVolumeValueEl) this.ambientVolumeValueEl.value = `${initialAmbientVolume}%`;
 
     document.getElementById('open-options')?.addEventListener('click', () => { this.audio.playUi(); this.setOptionsOpen(true); });
     document.getElementById('close-options')?.addEventListener('click', () => { this.audio.playUi(); this.setOptionsOpen(false); });
@@ -222,6 +236,16 @@ export class GameScene extends Phaser.Scene {
       const percent = Phaser.Math.Clamp(Number(this.masterVolumeEl?.value ?? 42), 0, 100);
       this.audio.setVolume(percent / 100);
       if (this.masterVolumeValueEl) this.masterVolumeValueEl.value = `${percent}%`;
+    });
+    this.musicVolumeEl?.addEventListener('input', () => {
+      const percent = Phaser.Math.Clamp(Number(this.musicVolumeEl?.value ?? 24), 0, 100);
+      this.audio.setMusicVolume(percent / 100);
+      if (this.musicVolumeValueEl) this.musicVolumeValueEl.value = `${percent}%`;
+    });
+    this.ambientVolumeEl?.addEventListener('input', () => {
+      const percent = Phaser.Math.Clamp(Number(this.ambientVolumeEl?.value ?? 18), 0, 100);
+      this.audio.setAmbientVolume(percent / 100);
+      if (this.ambientVolumeValueEl) this.ambientVolumeValueEl.value = `${percent}%`;
     });
     this.optionsDialogEl?.addEventListener('click', (event) => {
       if (event.target === this.optionsDialogEl) this.setOptionsOpen(false);
