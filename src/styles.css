@@ -3190,6 +3190,36 @@ kbd {
   line-height: 1.55;
 }
 
+.audio-test-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.audio-test-row button {
+  padding: 7px 11px;
+  color: #182016;
+  font: 700 11px/1 system-ui, sans-serif;
+  background: linear-gradient(#e6c965, #ae812b);
+  border: 1px solid #f0dc87;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.audio-test-row button:hover,
+.audio-test-row button:focus-visible {
+  filter: brightness(1.12);
+  outline: 1px solid #fff2a8;
+  outline-offset: 2px;
+}
+
+.audio-test-row span {
+  color: #b8cfad;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
 .options-save-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

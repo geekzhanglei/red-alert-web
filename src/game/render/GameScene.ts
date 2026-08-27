@@ -84,6 +84,7 @@ export class GameScene extends Phaser.Scene {
   private musicVolumeValueEl: HTMLOutputElement | null = null;
   private ambientVolumeEl: HTMLInputElement | null = null;
   private ambientVolumeValueEl: HTMLOutputElement | null = null;
+  private audioTestStatusEl: HTMLElement | null = null;
   private optionsPauseOwned = false;
   private audio!: GameAudio;
 
@@ -195,6 +196,7 @@ export class GameScene extends Phaser.Scene {
     this.musicVolumeValueEl = document.getElementById('music-volume-value') as HTMLOutputElement | null;
     this.ambientVolumeEl = document.getElementById('ambient-volume') as HTMLInputElement | null;
     this.ambientVolumeValueEl = document.getElementById('ambient-volume-value') as HTMLOutputElement | null;
+    this.audioTestStatusEl = document.getElementById('audio-test-status');
 
     const initialPercent = Math.round(this.cameraControl.getSensitivity() * 100);
     if (this.mouseSensitivityEl) this.mouseSensitivityEl.value = String(initialPercent);
@@ -208,6 +210,16 @@ export class GameScene extends Phaser.Scene {
     const initialAmbientVolume = Math.round(this.audio.getAmbientVolume() * 100);
     if (this.ambientVolumeEl) this.ambientVolumeEl.value = String(initialAmbientVolume);
     if (this.ambientVolumeValueEl) this.ambientVolumeValueEl.value = `${initialAmbientVolume}%`;
+
+    document.getElementById('test-audio')?.addEventListener('click', () => {
+      const available = this.audio.ensureUnlocked();
+      this.audio.playUi();
+      if (this.audioTestStatusEl) {
+        this.audioTestStatusEl.textContent = available
+          ? '已发送试听音效 · 请确认系统音量'
+          : '浏览器不支持 Web Audio';
+      }
+    });
 
     document.getElementById('open-options')?.addEventListener('click', () => { this.audio.playUi(); this.setOptionsOpen(true); });
     document.getElementById('close-options')?.addEventListener('click', () => { this.audio.playUi(); this.setOptionsOpen(false); });

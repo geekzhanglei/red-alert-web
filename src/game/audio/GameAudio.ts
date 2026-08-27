@@ -15,6 +15,7 @@ export class GameAudio {
   private ambientSource: AudioBufferSourceNode | null = null;
   private ambientHum: OscillatorNode | null = null;
   private musicTimer: number | null = null;
+  private loopsStarted = false;
   private musicStep = 0;
   private volume = 0.42;
   private musicVolume = 0.24;
@@ -30,8 +31,8 @@ export class GameAudio {
     this.musicVolume = readStoredVolume('red-alert.musicVolume', 0.24);
     this.ambientVolume = readStoredVolume('red-alert.ambientVolume', 0.18);
     const unlock = () => this.unlock();
-    window.addEventListener('pointerdown', unlock, { passive: true });
-    window.addEventListener('keydown', unlock, { passive: true });
+    window.addEventListener('pointerdown', unlock, { capture: true, passive: true });
+    window.addEventListener('keydown', unlock, { capture: true, passive: true });
   }
 
   getVolume(): number {
@@ -67,6 +68,12 @@ export class GameAudio {
     this.ambientVolume = clampVolume(value);
     persistStoredVolume('red-alert.ambientVolume', this.ambientVolume);
     if (this.ambientBus && this.context) this.ambientBus.gain.setTargetAtTime(this.ambientVolume, this.context.currentTime, 0.08);
+  }
+
+  /** 在明确的用户手势中调用，确保浏览器允许恢复音频上下文。 */
+  ensureUnlocked(): boolean {
+    this.unlock();
+    return Boolean(this.context);
   }
 
   /** 每帧调用一次，读取逻辑事件并播放战斗反馈。 */
@@ -116,6 +123,7 @@ export class GameAudio {
   }
 
   playUi(kind: 'click' | 'stop' = 'click'): void {
+    this.ensureUnlocked();
     if (kind === 'stop') this.tone(170, 110, 0.07, 0.035, 'square');
     else this.tone(520, 660, 0.045, 0.035, 'sine');
   }
@@ -137,10 +145,19 @@ export class GameAudio {
       this.musicBus.connect(this.master);
       this.ambientBus.connect(this.master);
       this.master.connect(this.context.destination);
-      this.startAmbient();
-      this.startMusic();
     }
-    if (this.context.state === 'suspended') void this.context.resume();
+    if (this.context.state === 'suspended') {
+      void this.context.resume().then(() => this.startAudioLoops()).catch(() => undefined);
+    } else if (this.context.state === 'running') {
+      this.startAudioLoops();
+    }
+  }
+
+  private startAudioLoops(): void {
+    if (this.loopsStarted || !this.context || this.context.state !== 'running') return;
+    this.loopsStarted = true;
+    this.startAmbient();
+    this.startMusic();
   }
 
   private playSelect(): void {
@@ -356,13 +373,7 @@ export class GameAudio {
 }
 
 function readVolume(): number {
-  try {
-    const value = Number(window.localStorage.getItem('red-alert.volume'));
-    if (Number.isFinite(value)) return Math.max(0, Math.min(1, value));
-  } catch {
-    // 存储不可用时使用默认音量。
-  }
-  return 0.42;
+  return readStoredVolume('red-alert.volume', 0.42);
 }
 
 function persistVolume(value: number): void {
@@ -379,7 +390,10 @@ function clampVolume(value: number): number {
 
 function readStoredVolume(key: string, fallback: number): number {
   try {
-    const value = Number(window.localStorage.getItem(key));
+    const stored = window.localStorage.getItem(key);
+    // Number(null) 和 Number('') 都是 0，不能把“没有设置过”误判成静音。
+    if (stored === null || stored.trim() === '') return fallback;
+    const value = Number(stored);
     return Number.isFinite(value) ? clampVolume(value) : fallback;
   } catch {
     return fallback;
