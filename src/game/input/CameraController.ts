@@ -9,6 +9,8 @@ export interface CameraControllerOptions {
   edgeScrollMargin?: number; // 距视口边缘多少像素触发边缘滚屏
   edgeScrollSpeed?: number;  // 边缘滚屏速度（世界像素/秒）
   leftButtonPan?: boolean;   // 阶段三框选接入后改为 false，左键拖拽让给框选
+  /** 选项窗口打开或输入控件聚焦时，阻止方向键移动视角。 */
+  isKeyboardPanBlocked?: () => boolean;
   /** H 键回主视图的锚点（世界坐标）。留空则 H 键不绑定。 */
   homeView?: { x: number; y: number; zoom?: number };
 }
@@ -28,6 +30,7 @@ export class CameraController {
   private pointerActive = false; // 鼠标是否真的在画布上（防止启动时幽灵指针触发边缘滚屏）
   private lastX = 0;
   private lastY = 0;
+  private cursorKeys: Phaser.Types.Input.Keyboard.CursorKeys | null = null;
 
   constructor(scene: Phaser.Scene, cam: Phaser.Cameras.Scene2D.Camera, opts?: CameraControllerOptions) {
     this.cam = cam;
@@ -41,6 +44,7 @@ export class CameraController {
       edgeScrollMargin: 24,
       edgeScrollSpeed: 600,
       leftButtonPan: true,
+      isKeyboardPanBlocked: () => false,
       homeView: undefined,
       ...opts,
     };
@@ -91,10 +95,28 @@ export class CameraController {
 
     // H 键 / F1 键：回到玩家基地（homeView）默认缩放 1.0。
     const kb = scene.input.keyboard;
-    if (kb && this.opts.homeView) {
-      const goHome = () => this.goHome();
-      kb.on('keydown-H', goHome);
-      kb.on('keydown-F1', goHome);
+    if (kb) {
+      // 不启用 Phaser 的全局 capture，让选项里的 range 控件仍能用方向键微调。
+      this.cursorKeys = kb.addKeys({
+        up: Phaser.Input.Keyboard.KeyCodes.UP,
+        down: Phaser.Input.Keyboard.KeyCodes.DOWN,
+        left: Phaser.Input.Keyboard.KeyCodes.LEFT,
+        right: Phaser.Input.Keyboard.KeyCodes.RIGHT,
+      }, false) as Phaser.Types.Input.Keyboard.CursorKeys;
+
+      kb.on('keydown', (event: KeyboardEvent) => {
+        if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+        if (this.opts.isKeyboardPanBlocked?.()) return;
+        const target = event.target as HTMLElement | null;
+        if (target && ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName)) return;
+        event.preventDefault();
+      });
+
+      if (this.opts.homeView) {
+        const goHome = () => this.goHome();
+        kb.on('keydown-H', goHome);
+        kb.on('keydown-F1', goHome);
+      }
     }
   }
 
@@ -106,17 +128,26 @@ export class CameraController {
     this.cam.centerOn(h.x, h.y);
   }
 
-  /** 每帧调用，dt 单位是秒。负责边缘滚屏。 */
+  /** 每帧调用，dt 单位是秒。负责方向键和边缘滚屏。 */
   update(dt: number, viewportWidth: number, viewportHeight: number): void {
-    if (this.dragging || !this.pointerActive) return;
-    const p = this.input.activePointer;
-    const m = this.opts.edgeScrollMargin;
     let dx = 0;
     let dy = 0;
-    if (p.x <= m) dx -= 1;
-    else if (p.x >= viewportWidth - m) dx += 1;
-    if (p.y <= m) dy -= 1;
-    else if (p.y >= viewportHeight - m) dy += 1;
+    if (this.cursorKeys && !this.opts.isKeyboardPanBlocked?.()) {
+      if (this.cursorKeys.left.isDown) dx -= 1;
+      if (this.cursorKeys.right.isDown) dx += 1;
+      if (this.cursorKeys.up.isDown) dy -= 1;
+      if (this.cursorKeys.down.isDown) dy += 1;
+    }
+
+    if (!this.dragging && this.pointerActive) {
+      const p = this.input.activePointer;
+      const m = this.opts.edgeScrollMargin;
+      if (p.x <= m) dx -= 1;
+      else if (p.x >= viewportWidth - m) dx += 1;
+      if (p.y <= m) dy -= 1;
+      else if (p.y >= viewportHeight - m) dy += 1;
+    }
+
     if (dx !== 0 || dy !== 0) {
       // 世界距离 = 屏幕距离 / zoom，缩放后滚屏速度保持一致
       const speed = (this.opts.edgeScrollSpeed * this.opts.sensitivity * dt) / this.cam.zoom;

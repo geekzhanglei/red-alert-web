@@ -138,6 +138,7 @@ export class GameScene extends Phaser.Scene {
       // 原版红警 2 是固定比例视图，滚轮不改变战场缩放，避免边缘出现黑色空洞。
       allowZoom: false,
       sensitivity: initialSensitivity,
+      isKeyboardPanBlocked: () => Boolean(this.optionsDialogEl && !this.optionsDialogEl.hidden),
       // CameraController 接收地图世界像素，不是 0~63 的逻辑格坐标。
       homeView: { x: home.x, y: home.y, zoom: 1 },
     });
