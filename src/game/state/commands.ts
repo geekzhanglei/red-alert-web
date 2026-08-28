@@ -1,9 +1,10 @@
 import type { GameState } from './GameState';
 import type { EntityState } from './entities';
-import { spawnBuilding } from './entities';
+import { removeEntity, spawnBuilding } from './entities';
 import { findPath } from '../pathfinding/AStar';
 import { tileAt } from './map';
 import { canAfford, canSustainBuilding, changeMoney } from './players';
+import { BUILDING_REQUIREMENTS } from '../data/buildings';
 import type { BuildingDefinition } from '../data/buildings';
 import { enqueueTrain } from '../systems/production';
 import { applyUpgrade } from '../systems/upgrade';
@@ -21,6 +22,7 @@ export function upgradeCost(state: GameState, e: EntityState): number {
 export type GameCommand =
   | { type: 'move'; playerId: number; entityId: number; targetX: number; targetY: number }
   | { type: 'attack'; playerId: number; entityId: number; targetEntityId: number }
+  | { type: 'deploy'; playerId: number; entityId: number }
   | { type: 'build'; playerId: number; buildingTypeId: string; x: number; y: number }
   | { type: 'train'; playerId: number; buildingId: number; unitTypeId: string }
   | { type: 'upgrade'; playerId: number; entityId: number }
@@ -94,15 +96,30 @@ export function processCommands(state: GameState): void {
         }
         break;
       }
+      case 'deploy': {
+        const e = state.entities[cmd.entityId];
+        if (!e || e.type !== 'unit' || e.typeId !== 'mcv' || e.ownerId !== cmd.playerId) break;
+        const baseDef = state.buildingDefs.base;
+        const x = e.tileX - Math.floor(baseDef.footprint.w / 2);
+        const y = e.tileY - Math.floor(baseDef.footprint.h / 2);
+        if (!canDeployBase(state, e, x, y)) break;
+        const base = spawnBuilding(state, 'base', cmd.playerId, x, y);
+        removeEntity(state, e.id);
+        if (cmd.playerId === 0) state.selectedEntityIds = [base.id];
+        break;
+      }
       case 'build': {
         const def = state.buildingDefs[cmd.buildingTypeId];
         const ownerId = cmd.playerId;
         if (!def) break;
+        if (cmd.buildingTypeId === 'base') break; // 主基地只能由 MCV 部署
+        const requirements = BUILDING_REQUIREMENTS[cmd.buildingTypeId] ?? [];
+        if (!requirements.every((required) => hasOwnedBuilding(state, ownerId, required))) break;
         if (!canAfford(state, ownerId, def.cost)) break; // 钱不够
         if (!canSustainBuilding(state, ownerId, def)) break; // 电力不足
         if (!canPlace(state, cmd.x, cmd.y, def)) break; // 放不下（重叠/水上/越界）
         changeMoney(state, ownerId, -def.cost);
-        spawnBuilding(state, cmd.buildingTypeId, ownerId, cmd.x, cmd.y);
+        spawnBuilding(state, cmd.buildingTypeId, ownerId, cmd.x, cmd.y, { grantHarvester: cmd.buildingTypeId === 'refinery' });
         break;
       }
       case 'train':
@@ -134,6 +151,26 @@ export function processCommands(state: GameState): void {
     state.commandLog.push({ tick: state.tick, command: cmd });
   }
   state.pendingCommands = [];
+}
+
+function hasOwnedBuilding(state: GameState, ownerId: number, typeId: string): boolean {
+  return state.entitiesOrder.some((id) => {
+    const entity = state.entities[id];
+    return entity?.type === 'building' && entity.ownerId === ownerId && entity.typeId === typeId;
+  });
+}
+
+/** MCV 部署允许覆盖它自身占用的那一格，其余基地 footprint 必须为空且可建。 */
+function canDeployBase(state: GameState, mcv: EntityState, x: number, y: number): boolean {
+  const def = state.buildingDefs.base;
+  for (let dy = 0; dy < def.footprint.h; dy++) {
+    for (let dx = 0; dx < def.footprint.w; dx++) {
+      const tile = tileAt(state.map, x + dx, y + dy);
+      if (!tile || !tile.buildable) return false;
+      if (tile.occupiedBy != null && tile.occupiedBy !== mcv.id) return false;
+    }
+  }
+  return true;
 }
 
 /** 应用 move：算 A* 路径存入 e.path。不可达/已在目标则静止。经济系统的采矿车寻路也复用本函数。 */

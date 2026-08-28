@@ -14,6 +14,7 @@ import rocketTrooperUrl from './optimized/unit-rocket-trooper.webp';
 import scoutUrl from './optimized/unit-scout.webp';
 import artilleryUrl from './optimized/unit-artillery.webp';
 import heavyTankUrl from './optimized/unit-heavy-tank.webp';
+import mcvUrl from './optimized/unit-mcv.svg';
 import powerPlantUrl from './optimized/building-power-plant.webp';
 import guardTowerUrl from './optimized/building-guard-tower.webp';
 import radarUrl from './optimized/building-radar.webp';
@@ -27,6 +28,7 @@ export const UNIT_SPRITE_URLS: Record<string, string> = {
   scout: scoutUrl,
   artillery: artilleryUrl,
   heavyTank: heavyTankUrl,
+  mcv: mcvUrl,
 };
 
 export const BUILDING_SPRITE_URLS: Record<string, string> = {
@@ -55,6 +57,7 @@ const RUNTIME_ASSET_URLS = [
   scoutUrl,
   artilleryUrl,
   heavyTankUrl,
+  mcvUrl,
   powerPlantUrl,
   guardTowerUrl,
   radarUrl,
@@ -94,6 +97,7 @@ export function loadAllSprites(scene: Phaser.Scene): void {
     scene.load.spritesheet(`unit_scout_${o}`, scoutUrl, NEW_UNIT_FACING_SHEET);
     scene.load.spritesheet(`unit_artillery_${o}`, artilleryUrl, NEW_UNIT_FACING_SHEET);
     scene.load.spritesheet(`unit_heavyTank_${o}`, heavyTankUrl, NEW_UNIT_FACING_SHEET);
+    scene.load.spritesheet(`unit_mcv_${o}`, mcvUrl, NEW_UNIT_FACING_SHEET);
   }
   // 建筑
   for (const o of [0, 1]) {

@@ -19,6 +19,21 @@ function flatMap(width: number, height: number) {
 }
 
 describe('命令系统', () => {
+  it('MCV 部署命令把基地车转换成主基地并保留玩家选中状态', () => {
+    const s = createInitialGameState({ testUnits: false });
+    s.map = flatMap(12, 12);
+    const mcv = spawnUnit(s, 'mcv', 0, 6, 6);
+    s.selectedEntityIds = [mcv.id];
+    s.pendingCommands.push({ type: 'deploy', playerId: 0, entityId: mcv.id });
+    processCommands(s);
+    expect(s.entities[mcv.id]).toBeUndefined();
+    const base = s.entitiesOrder.map((id) => s.entities[id]).find((e) => e?.type === 'building' && e.typeId === 'base');
+    expect(base).toBeDefined();
+    expect(base?.tileX).toBe(5);
+    expect(base?.tileY).toBe(5);
+    expect(s.selectedEntityIds).toEqual([base!.id]);
+  });
+
   it('入队命令在下一个 tick 应用，实体命令不含 playerId，日志含 playerId', () => {
     const s = createInitialGameState({ testUnits: false });
     s.map = flatMap(12, 12);

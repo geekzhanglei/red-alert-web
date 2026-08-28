@@ -45,17 +45,17 @@ describe('资金接口', () => {
 });
 
 describe('采矿车循环', () => {
-  it('默认战局在玩家矿场附近生成可采集的黄金矿脉', () => {
+  it('默认战局以 MCV 开局并生成可采集的黄金矿脉', () => {
     const state = createInitialGameState();
-    const refinery = state.entitiesOrder
+    const mcv = state.entitiesOrder
       .map((id) => state.entities[id])
-      .find((entity) => entity.type === 'building' && entity.typeId === 'refinery' && entity.ownerId === 0);
-    expect(refinery).toBeDefined();
+      .find((entity) => entity.type === 'unit' && entity.typeId === 'mcv' && entity.ownerId === 0);
+    expect(mcv).toBeDefined();
     const nearbyOre = state.map.tiles.filter((tile, index) => {
-      if (tile.terrain !== 'ore' || tile.oreAmount <= 0 || !refinery) return false;
+      if (tile.terrain !== 'ore' || tile.oreAmount <= 0 || !mcv) return false;
       const x = index % state.map.width;
       const y = Math.floor(index / state.map.width);
-      return Math.max(Math.abs(x - refinery.tileX), Math.abs(y - refinery.tileY)) <= 8;
+      return Math.max(Math.abs(x - mcv.tileX), Math.abs(y - mcv.tileY)) <= 16;
     });
     expect(nearbyOre.length).toBeGreaterThanOrEqual(7);
   });
@@ -131,6 +131,10 @@ describe('建筑放置（build 命令）', () => {
         expect(game.state.map.tiles[(2 + dy) * 10 + (2 + dx)].occupiedBy).toBe(building!.id);
       }
     }
+    expect(game.state.entitiesOrder.some((id) => {
+      const entity = game.state.entities[id];
+      return entity?.type === 'unit' && entity.ownerId === 0 && entity.typeId === 'harvester';
+    })).toBe(true);
   });
 
   it('电力不足时不放置耗电建筑，但允许建造发电厂恢复供电', () => {

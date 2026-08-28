@@ -5,6 +5,7 @@ import { createInitialGameState, PLAYER_ID, Difficulty } from '../state/GameStat
 import type { GameState } from '../state/GameState';
 import type { EntityState } from '../state/entities';
 import { Terrain, tileAt } from '../state/map';
+import { BUILDING_REQUIREMENTS } from '../data/buildings';
 import { gridToScreen, screenToGrid } from './isometric';
 import { MapRenderer, mapWorldBounds } from './MapRenderer';
 import { UnitRenderer } from './UnitRenderer';
@@ -122,11 +123,14 @@ export class GameScene extends Phaser.Scene {
 
     const cam = this.cameras.main;
     const bounds = mapWorldBounds(this.sim.state.map);
-    const commandCenter = this.sim.state.entitiesOrder
+    const startAnchor = this.sim.state.entitiesOrder
       .map((id) => this.sim.state.entities[id])
-      .find((entity) => entity?.type === 'building' && entity.ownerId === PLAYER_ID && entity.typeId === 'base');
-    const home = commandCenter
-      ? gridToScreen(commandCenter.x, commandCenter.y)
+      .find((entity) => entity?.ownerId === PLAYER_ID && (
+        (entity.type === 'building' && entity.typeId === 'base')
+        || (entity.type === 'unit' && entity.typeId === 'mcv')
+      ));
+    const home = startAnchor
+      ? gridToScreen(startAnchor.x, startAnchor.y)
       : { x: bounds.centerX, y: bounds.centerY };
     const initialSensitivity = this.readMouseSensitivity();
     cam.setBounds(bounds.x, bounds.y, bounds.width, bounds.height);
@@ -335,7 +339,17 @@ export class GameScene extends Phaser.Scene {
       if (this.sim.state.gameOver) return;
       this.loop.togglePause();
     };
+    const deploySelectedMcv = () => {
+      if (this.sim.state.gameOver || (this.optionsDialogEl && !this.optionsDialogEl.hidden) || this.placement.isActive()) return;
+      for (const id of this.sim.state.selectedEntityIds) {
+        const entity = this.sim.state.entities[id];
+        if (entity?.type === 'unit' && entity.ownerId === PLAYER_ID && entity.typeId === 'mcv') {
+          this.sim.state.pendingCommands.push({ type: 'deploy', playerId: PLAYER_ID, entityId: entity.id });
+        }
+      }
+    };
     kb.on('keydown-SPACE', tryTogglePause);
+    kb.on('keydown-D', deploySelectedMcv);
     kb.on('keydown-ONE', tryRate(1));
     kb.on('keydown-TWO', tryRate(2));
     kb.on('keydown-THREE', tryRate(4));
@@ -538,15 +552,7 @@ export class GameScene extends Phaser.Scene {
         .filter((entity) => entity?.type === 'building' && entity.ownerId === PLAYER_ID)
         .map((entity) => entity.typeId),
     );
-    const requirements: Record<string, string[]> = {
-      refinery: ['base'],
-      powerPlant: ['base'],
-      barracks: ['powerPlant'],
-      factory: ['refinery'],
-      guardTower: ['barracks'],
-      radar: ['factory'],
-    };
-    return (requirements[typeId] ?? []).every((required) => owned.has(required));
+    return (BUILDING_REQUIREMENTS[typeId] ?? []).every((required) => owned.has(required));
   }
 
   private updateMoney(): void {
@@ -585,7 +591,8 @@ export class GameScene extends Phaser.Scene {
       const def = e.type === 'building' ? state.buildingDefs[e.typeId] : state.defs[e.typeId];
       const tag = e.type === 'building' ? '建筑' : '';
       const maxHp = def.maxHp * e.hpMultiplier;
-      this.selectionInfoEl.textContent = `选择：${def.name}${tag} · 生命 ${Math.ceil(e.hp)}/${Math.round(maxHp)}`;
+      const deployHint = e.type === 'unit' && e.typeId === 'mcv' ? ' · D 展开基地车' : '';
+      this.selectionInfoEl.textContent = `选择：${def.name}${tag} · 生命 ${Math.ceil(e.hp)}/${Math.round(maxHp)}${deployHint}`;
     } else {
       this.selectionInfoEl.textContent = `选择：${items.length} 个实体`;
     }

@@ -1,6 +1,7 @@
 import { AiBrainState, GameState } from '../state/GameState';
 import { EntityState } from '../state/entities';
-import { canAfford } from '../state/players';
+import { canAfford, canSustainBuilding } from '../state/players';
+import { BUILDING_REQUIREMENTS } from '../data/buildings';
 import { GridPoint } from '../pathfinding/AStar';
 import { tileAt } from '../state/map';
 
@@ -13,7 +14,19 @@ import { tileAt } from '../state/map';
 
 const AI_PLAYER_ID = 1;
 const STRATEGIC_PERIOD = 30; // 战略层每 30 tick 醒一次（约 1.5 秒）
-const DEFAULT_BUILD_ORDER = ['refinery', 'powerPlant', 'barracks', 'guardTower', 'factory', 'radar'];
+/**
+ * 经典遭遇战科技顺序：先把 MCV 变成主基地，再接通电网、矿场和兵营，
+ * 最后才进入防御/战车/雷达阶段。第二座电厂提前补上，避免工厂和防御设施因缺电卡死。
+ */
+const DEFAULT_BUILD_ORDER = [
+  { typeId: 'powerPlant', minCount: 1 },
+  { typeId: 'refinery', minCount: 1 },
+  { typeId: 'barracks', minCount: 1 },
+  { typeId: 'powerPlant', minCount: 2 },
+  { typeId: 'guardTower', minCount: 1 },
+  { typeId: 'factory', minCount: 1 },
+  { typeId: 'radar', minCount: 1 },
+] as const;
 
 /** 难度对 AI 节奏的微调：简单让 AI 慢、迟钝；困难让 AI 更快、阈值更低。 */
 const DIFFICULTY_AI: Record<string, { nextThinkTick: number; attackThreshold: number; threatThreshold: number }> = {
@@ -52,6 +65,8 @@ export function updateAi(state: GameState): void {
 }
 
 function strategicThink(state: GameState, brain: AiBrainState, pid: number): void {
+  // 没有主基地时，AI 只能先寻找并部署 MCV，不能跳过开局直接造建筑/出兵。
+  if (!ensureBaseDeployment(state, pid)) return;
   // 1) 受袭检测：己方建筑在挨打 → 转 defend
   if (anyBuildingUnderAttack(state, pid)) {
     brain.state = 'defend';
@@ -100,7 +115,18 @@ function ensureUnitProduction(state: GameState, pid: number): void {
       (cmd) => cmd.type === 'train' && cmd.buildingId === b.id,
     );
     if (alreadyQueued) continue;
-    const unitTypeId = produces[0];
+    // 战车工厂首辆矿车可作为经济补充；有矿车后优先排队战斗单位，避免 AI 永远只造矿车。
+    const harvesterCount = state.entitiesOrder.filter((eid) => {
+      const entity = state.entities[eid];
+      return entity?.type === 'unit' && entity.ownerId === pid && entity.typeId === 'harvester';
+    }).length;
+    const refineryCount = state.entitiesOrder.filter((eid) => {
+      const entity = state.entities[eid];
+      return entity?.type === 'building' && entity.ownerId === pid && entity.typeId === 'refinery';
+    }).length;
+    const unitTypeId = harvesterCount < refineryCount
+      ? (produces.includes('harvester') ? 'harvester' : produces[0])
+      : (produces.find((unitId) => unitId !== 'harvester') ?? produces[0]);
     if (canAfford(state, pid, state.defs[unitTypeId]?.cost ?? Infinity)) {
       state.pendingCommands.push({ type: 'train', playerId: pid, buildingId: b.id, unitTypeId });
     }
@@ -156,26 +182,45 @@ function tacticalAct(state: GameState): void {
 function ensureBuildingConstruction(state: GameState, brain: AiBrainState, pid: number): void {
   while (brain.buildIndex < DEFAULT_BUILD_ORDER.length) {
     const item = DEFAULT_BUILD_ORDER[brain.buildIndex];
-    const def = state.buildingDefs[item];
+    const def = state.buildingDefs[item.typeId];
     if (!def) {
       brain.buildIndex++;
       continue;
     }
-    if (hasBuilding(state, pid, item)) {
+    if (countBuildings(state, pid, item.typeId) >= item.minCount) {
       brain.buildIndex++;
       continue;
     }
+    // AI 也走和玩家相同的科技树与电网校验；命令尚未消费时不要重复排队。
+    if (!(BUILDING_REQUIREMENTS[item.typeId] ?? []).every((required) => hasBuilding(state, pid, required))) return;
+    if (state.pendingCommands.some(
+      (cmd) => cmd.type === 'build' && cmd.playerId === pid && cmd.buildingTypeId === item.typeId,
+    )) return;
     if (!canAfford(state, pid, def.cost)) return; // 钱不够，下次再试
+    if (!canSustainBuilding(state, pid, def)) return; // 电网不足，下次先补发电厂
     const spot = findBuildSpot(state, def.footprint.w, def.footprint.h, findPlayerCenter(state, pid));
     if (!spot) {
       // 找不到位置（围死/地形塞满），跳过这一项
       brain.buildIndex++;
       continue;
     }
-    state.pendingCommands.push({ type: 'build', playerId: pid, buildingTypeId: item, x: spot.x, y: spot.y });
+    state.pendingCommands.push({ type: 'build', playerId: pid, buildingTypeId: item.typeId, x: spot.x, y: spot.y });
     brain.buildIndex++;
     return; // 一个 tick 放一个，避免一次花光钱
   }
+}
+
+function ensureBaseDeployment(state: GameState, pid: number): boolean {
+  if (hasBuilding(state, pid, 'base')) return true;
+  const mcv = state.entitiesOrder
+    .map((id) => state.entities[id])
+    .find((entity) => entity?.type === 'unit' && entity.ownerId === pid && entity.typeId === 'mcv');
+  if (!mcv) return false;
+  const alreadyQueued = state.pendingCommands.some(
+    (cmd) => cmd.type === 'deploy' && cmd.playerId === pid && cmd.entityId === mcv.id,
+  );
+  if (!alreadyQueued) state.pendingCommands.push({ type: 'deploy', playerId: pid, entityId: mcv.id });
+  return false;
 }
 
 function countAttackUnits(state: GameState, pid: number): number {
@@ -193,6 +238,15 @@ function hasBuilding(state: GameState, pid: number, typeId: string): boolean {
     if (e && e.type === 'building' && e.typeId === typeId && e.ownerId === pid) return true;
   }
   return false;
+}
+
+function countBuildings(state: GameState, pid: number, typeId: string): number {
+  let count = 0;
+  for (const id of state.entitiesOrder) {
+    const e = state.entities[id];
+    if (e && e.type === 'building' && e.typeId === typeId && e.ownerId === pid) count++;
+  }
+  return count;
 }
 
 function anyBuildingUnderAttack(state: GameState, pid: number): boolean {

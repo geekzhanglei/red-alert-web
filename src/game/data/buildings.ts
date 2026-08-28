@@ -23,6 +23,16 @@ export interface BuildingDefinition {
 
 export type BuildingDefinitionMap = Record<string, BuildingDefinition>;
 
+/** 遭遇战科技树：建筑必须在已有前置设施后才能放置。 */
+export const BUILDING_REQUIREMENTS: Record<string, string[]> = {
+  refinery: ['base'],
+  powerPlant: ['base'],
+  barracks: ['powerPlant'],
+  factory: ['refinery'],
+  guardTower: ['barracks'],
+  radar: ['factory'],
+};
+
 export const BUILDING_DEFINITIONS: BuildingDefinitionMap = {
   base: {
     id: 'base',
@@ -34,7 +44,8 @@ export const BUILDING_DEFINITIONS: BuildingDefinitionMap = {
     footprint: { w: 3, h: 3 },
     powerProvided: 50,
     powerConsumed: 0,
-    produces: ['harvester'],
+    // 采矿车由矿场免费提供；基地车展开后的 Construction Yard 不直接生产矿车。
+    produces: [],
     sprite: 'base',
   },
   refinery: {
@@ -73,7 +84,8 @@ export const BUILDING_DEFINITIONS: BuildingDefinitionMap = {
     footprint: { w: 3, h: 3 },
     powerProvided: 0,
     powerConsumed: 50,
-    produces: ['tank', 'scout', 'artillery', 'heavyTank'],
+    // 战车工厂可补充额外矿车；第一辆矿车由矿场建成时随附。
+    produces: ['harvester', 'tank', 'scout', 'artillery', 'heavyTank'],
     sprite: 'factory',
   },
   powerPlant: {

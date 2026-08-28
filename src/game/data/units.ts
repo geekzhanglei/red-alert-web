@@ -35,6 +35,20 @@ export interface UnitDefinition {
 export type UnitDefinitionMap = Record<string, UnitDefinition>;
 
 export const UNIT_DEFINITIONS: UnitDefinitionMap = {
+  mcv: {
+    id: 'mcv',
+    name: '基地车',
+    cost: 3000,
+    buildTicks: 240,
+    maxHp: 600,
+    speed: 1.05,
+    armor: 'heavy',
+    cargoCapacity: 0,
+    harvestRate: 0,
+    visionRange: 7,
+    footprint: { w: 1, h: 1 },
+    sprite: 'mcv',
+  },
   infantry: {
     id: 'infantry',
     name: '步兵',

@@ -80,7 +80,7 @@ export interface GameOptions {
   width?: number;
   height?: number;
   seed?: number;
-  /** 是否生成开发期测试部队，默认 true。 */
+  /** 是否生成开发期测试布局；未传时使用红警式 MCV 开局，false 表示空状态。 */
   testUnits?: boolean;
   /** 难度：影响双方起始资金 + AI 出兵节奏。 */
   difficulty?: Difficulty;
@@ -137,21 +137,35 @@ export function createInitialGameState(options?: GameOptions): GameState {
     gameOver: false,
     winner: null, // null = 进行中；游戏未结束前不会读这个值
   };
-  if (options?.testUnits !== false) spawnTestSetup(state);
+  if (options?.testUnits === true) spawnDebugSetup(state);
+  else if (options?.testUnits !== false) spawnClassicSetup(state);
   return state;
 }
 
 /**
- * 开发期测试初始布局：程序化寻找可建块/可走格（确定性，随 seed 稳定），避免硬编码踩水。
- * 玩家：基地 + 矿场 + 采矿车 + 战斗单位；敌方：基地 + 战斗单位（阶段六前静止）。
+ * 红警式遭遇战开局：双方各自拥有一辆可部署的 MCV 和一组护卫部队。
+ * 基地、矿场和采矿车不预先放置，玩家需要先部署 MCV，再按科技/电力顺序发展。
  */
-function spawnTestSetup(state: GameState): void {
+function spawnClassicSetup(state: GameState): void {
+  const baseSpot = findBuildableSpot(state.map, 3, 3, 28, 18)!;
+  spawnUnit(state, 'mcv', 0, baseSpot.x + 1, baseSpot.y + 1);
+  spawnStarterGroup(state, 0, baseSpot, ['tank', 'tank', 'infantry', 'infantry', 'infantry']);
+  // 矿脉落在未来矿场候选点附近，部署后建矿场即可立即开始经济循环。
+  const refSpot = findBuildableSpot(state.map, 2, 2, 27, 22);
+  if (refSpot) seedStarterOreField(state.map, refSpot.x - 4, refSpot.y + 2);
+
+  const enemyBase = findBuildableSpot(state.map, 3, 3, 36, 30)!;
+  spawnUnit(state, 'mcv', 1, enemyBase.x + 1, enemyBase.y + 1);
+  spawnStarterGroup(state, 1, enemyBase, ['tank', 'infantry', 'infantry']);
+}
+
+/** 开发期沙盒布局：保留建筑和矿车，方便系统/美术调试，不作为正式开局。 */
+function spawnDebugSetup(state: GameState): void {
   const baseSpot = findBuildableSpot(state.map, 3, 3, 28, 18)!;
   spawnBuilding(state, 'base', 0, baseSpot.x, baseSpot.y);
   const refSpot = findBuildableSpot(state.map, 2, 2, 27, 22)!;
   spawnBuilding(state, 'refinery', 0, refSpot.x, refSpot.y);
   const harvSpot = findAdjacentFreeSpot(state.map, refSpot.x, refSpot.y, 2, 2, 26, 23)!;
-  // 单位以整数地格中心为出生锚点；避免从建筑出口出生时产生半格偏移。
   spawnUnit(state, 'harvester', 0, harvSpot.x, harvSpot.y);
   seedStarterOreField(state.map, refSpot.x - 4, refSpot.y + 2);
 
@@ -166,6 +180,31 @@ function spawnTestSetup(state: GameState): void {
   spawnUnit(state, 'infantry', 1, 38, 32);
   spawnUnit(state, 'tank', 1, 41, 34);
   spawnUnit(state, 'infantry', 1, 39, 37);
+}
+
+function spawnStarterGroup(
+  state: GameState,
+  ownerId: number,
+  baseSpot: { x: number; y: number },
+  types: string[],
+): void {
+  const offsets = [
+    { x: 3, y: 0 }, { x: 0, y: 3 }, { x: 3, y: 3 },
+    { x: 4, y: 1 }, { x: 1, y: 4 }, { x: 5, y: 2 },
+  ];
+  for (let i = 0; i < types.length; i++) {
+    const offset = offsets[i] ?? { x: 3 + i, y: 3 };
+    const spot = findAdjacentFreeSpot(
+      state.map,
+      baseSpot.x,
+      baseSpot.y,
+      3,
+      3,
+      baseSpot.x + offset.x,
+      baseSpot.y + offset.y,
+    );
+    if (spot) spawnUnit(state, types[i], ownerId, spot.x, spot.y);
+  }
 }
 
 /** 在玩家矿场附近放置一片稳定可见的黄金矿脉，避免随机地图开局只有零散或不可见矿点。 */

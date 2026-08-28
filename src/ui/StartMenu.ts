@@ -107,7 +107,7 @@ export function mountStartMenu(onPick: (d: Difficulty, resume?: boolean) => void
       </div>
 
       <footer class="command-footer">
-        <p><kbd>左键</kbd> 选择 / 框选　<kbd>右键</kbd> 移动 / 攻击　<kbd>H</kbd> 回主视图　<kbd>空格</kbd> 暂停</p>
+        <p><kbd>左键</kbd> 选择 / 框选　<kbd>右键</kbd> 移动 / 攻击　<kbd>H</kbd> 回主视图　<kbd>D</kbd> 展开基地车　<kbd>空格</kbd> 暂停</p>
         <span>ORIGINAL BROWSER RTS PROTOTYPE</span>
       </footer>
     </section>

@@ -27,12 +27,15 @@ describe('生产与电力', () => {
     const game = new Game(createInitialGameState({ testUnits: false }));
     game.state.map = makeFlatMap(10, 10);
     const base = spawnBuilding(game.state, 'base', 0, 4, 4); // 3x3 at (4,4)-(6,6)
-    const refinery = spawnBuilding(game.state, 'refinery', 0, 0, 0); // 不能产 infantry
+    const factory = spawnBuilding(game.state, 'factory', 0, 0, 0);
+    const refinery = spawnBuilding(game.state, 'refinery', 0, 0, 7); // 不能产 infantry
 
-    const okTrain = enqueueTrain(game.state, base.id, 0, 'harvester');
+    const okTrain = enqueueTrain(game.state, factory.id, 0, 'harvester');
     expect(okTrain).toBe(true);
-    expect(base.productionQueue).toEqual(['harvester']);
+    expect(factory.productionQueue).toEqual(['harvester']);
     expect(game.state.players[0].money).toBe(5000 - 1400);
+
+    expect(enqueueTrain(game.state, base.id, 0, 'harvester')).toBe(false); // 基地车展开后的主基地不生产单位
 
     expect(enqueueTrain(game.state, refinery.id, 0, 'infantry')).toBe(false);
     expect(refinery.productionQueue).toEqual([]);
@@ -131,23 +134,24 @@ describe('生产与电力', () => {
 
   it('出生点被堵住时保留已完成队列，空位出现后再出兵', () => {
     const game = new Game(createInitialGameState({ testUnits: false }));
-    game.state.map = makeFlatMap(3, 3);
+    game.state.map = makeFlatMap(6, 3);
     const base = spawnBuilding(game.state, 'base', 0, 0, 0);
-    expect(enqueueTrain(game.state, base.id, 0, 'harvester')).toBe(true);
+    const factory = spawnBuilding(game.state, 'factory', 0, 3, 0);
+    expect(enqueueTrain(game.state, factory.id, 0, 'harvester')).toBe(true);
 
-    // 3×3 基地占满整张地图，周围没有任何出生点。
+    // 基地和战车工厂占满整张地图，周围没有任何出生点。
     for (let i = 0; i < 180; i++) updateProduction(game.state);
-    expect(base.productionQueue).toEqual(['harvester']);
-    expect(base.productionProgress).toBe(180);
+    expect(factory.productionQueue).toEqual(['harvester']);
+    expect(factory.productionProgress).toBe(180);
 
     // 扩出一列空地后，下一次生产更新应成功重试。
-    const expanded = makeFlatMap(4, 3);
+    const expanded = makeFlatMap(7, 3);
     for (let y = 0; y < 3; y++) {
-      for (let x = 0; x < 3; x++) expanded.tiles[y * 4 + x].occupiedBy = base.id;
+      for (let x = 0; x < 6; x++) expanded.tiles[y * 7 + x].occupiedBy = x < 3 ? base.id : factory.id;
     }
     game.state.map = expanded;
     updateProduction(game.state);
-    expect(base.productionQueue).toEqual([]);
+    expect(factory.productionQueue).toEqual([]);
     expect(game.state.entitiesOrder.some((id) => game.state.entities[id]?.typeId === 'harvester')).toBe(true);
   });
 });

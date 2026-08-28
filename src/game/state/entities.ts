@@ -98,7 +98,14 @@ export function spawnUnit(state: GameState, typeId: string, ownerId: number, x: 
 }
 
 /** 生成建筑：占据 footprint 全部格。x/y 取 footprint 中心，tileX/tileY 为左上角。 */
-export function spawnBuilding(state: GameState, typeId: string, ownerId: number, tx: number, ty: number): EntityState {
+export function spawnBuilding(
+  state: GameState,
+  typeId: string,
+  ownerId: number,
+  tx: number,
+  ty: number,
+  options: { grantHarvester?: boolean } = {},
+): EntityState {
   const def = state.buildingDefs[typeId];
   const id = state.nextEntityId++;
   const tiles: GridPoint[] = [];
@@ -141,10 +148,34 @@ export function spawnBuilding(state: GameState, typeId: string, ownerId: number,
   state.entities[id] = e;
   state.entitiesOrder.push(id);
   occupy(state, e, tiles);
+  // 原版矿场落成时会随附一辆矿车。仅由建造命令显式开启，避免测试布局/读档重复赠送。
+  if (typeId === 'refinery' && options.grantHarvester) {
+    const spawn = findFreeAdjacentTile(state, e);
+    if (spawn) spawnUnit(state, 'harvester', ownerId, spawn.x, spawn.y);
+  }
   if (typeId === 'base' && state.players.every((p) => hasBase(state, p.id))) {
     state.victoryArmed = true;
   }
   return e;
+}
+
+/** 找到建筑出口附近的首个可走空格，用于矿场附赠矿车。 */
+function findFreeAdjacentTile(state: GameState, building: EntityState): GridPoint | null {
+  const def = state.buildingDefs[building.typeId];
+  if (!def) return null;
+  const candidates: GridPoint[] = [];
+  for (let dy = -1; dy <= def.footprint.h; dy++) {
+    for (let dx = -1; dx <= def.footprint.w; dx++) {
+      const inside = dx >= 0 && dx < def.footprint.w && dy >= 0 && dy < def.footprint.h;
+      if (inside) continue;
+      const x = building.tileX + dx;
+      const y = building.tileY + dy;
+      const tile = tileAt(state.map, x, y);
+      if (tile?.walkable && tile.occupiedBy == null) candidates.push({ x, y });
+    }
+  }
+  candidates.sort((a, b) => (a.y - b.y) || (a.x - b.x));
+  return candidates[0] ?? null;
 }
 
 function hasBase(state: GameState, playerId: number): boolean {

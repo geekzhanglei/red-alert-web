@@ -22,6 +22,23 @@ function makeFlatMap(width: number, height: number): MapState {
 }
 
 describe('AI 战略层', () => {
+  it('AI 先部署 MCV，再按电厂→矿场顺序发展', () => {
+    const game = new Game(createInitialGameState({ testUnits: false }));
+    game.state.map = makeFlatMap(40, 40);
+    spawnUnit(game.state, 'mcv', 1, 20, 20);
+    game.state.players[1].money = 12_000;
+
+    for (let i = 0; i < 150; i++) game.update(TICK_MS);
+
+    const types = game.state.entitiesOrder
+      .map((id) => game.state.entities[id])
+      .filter((e) => e.type === 'building' && e.ownerId === 1)
+      .map((e) => e.typeId);
+    expect(types[0]).toBe('base');
+    expect(types[1]).toBe('powerPlant');
+    expect(types[2]).toBe('refinery');
+  });
+
   it('AI 按 buildOrder 在基地旁建矿场/兵营（钱够时）', () => {
     const game = new Game(createInitialGameState({ testUnits: false }));
     game.state.map = makeFlatMap(40, 40);

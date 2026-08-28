@@ -106,6 +106,8 @@ export class GameAudio {
         playedMove = true;
       } else if (command.type === 'build') {
         this.playBuild();
+      } else if (command.type === 'deploy') {
+        this.playBuild();
       } else if (command.type === 'train') {
         this.playQueue();
       } else if (command.type === 'stop') {
