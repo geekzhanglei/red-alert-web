@@ -826,6 +826,13 @@ kbd {
   background: linear-gradient(#31464c, #19282c);
 }
 
+#view-actions button[aria-pressed="true"] {
+  border-color: var(--blue);
+  color: #e6f7ff;
+  background: linear-gradient(#3e5d63, #1b3035);
+  box-shadow: 0 0 12px rgb(71 212 255 / 35%);
+}
+
 #view-actions kbd {
   margin-right: 3px;
   color: var(--warning);

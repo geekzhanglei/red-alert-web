@@ -165,4 +165,16 @@ export class CameraController {
   getSensitivity(): number {
     return this.opts.sensitivity;
   }
+
+  /** 按住侧栏放大按钮时临时切到 1.5×，松开后立即恢复默认视图比例。 */
+  setHeldZoom(active: boolean): void {
+    const targetZoom = active ? Math.min(1.5, this.opts.maxZoom) : (this.opts.homeView?.zoom ?? 1);
+    if (Math.abs(this.cam.zoom - targetZoom) < 0.001) return;
+    const center = {
+      x: this.cam.worldView.centerX,
+      y: this.cam.worldView.centerY,
+    };
+    this.cam.zoom = targetZoom;
+    this.cam.centerOn(center.x, center.y);
+  }
 }

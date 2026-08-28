@@ -139,7 +139,7 @@ export class GameScene extends Phaser.Scene {
 
     this.cameraControl = new CameraController(this, cam, {
       leftButtonPan: false,
-      // 原版红警 2 是固定比例视图，滚轮不改变战场缩放，避免边缘出现黑色空洞。
+      // 滚轮不改变战场缩放；侧栏“放大”按钮提供可控的临时 1.5× 观察。
       allowZoom: false,
       sensitivity: initialSensitivity,
       isKeyboardPanBlocked: () => Boolean(this.optionsDialogEl && !this.optionsDialogEl.hidden),
@@ -170,6 +170,26 @@ export class GameScene extends Phaser.Scene {
   private wireViewActions(): void {
     document.getElementById('home-view')?.addEventListener('click', () => this.cameraControl.goHome());
     document.getElementById('back-to-menu')?.addEventListener('click', () => window.location.reload());
+    const zoomButton = document.getElementById('zoom-hold');
+    if (zoomButton) {
+      const beginZoom = (event: PointerEvent) => {
+        event.preventDefault();
+        this.cameraControl.setHeldZoom(true);
+        zoomButton.setAttribute('aria-pressed', 'true');
+        zoomButton.setPointerCapture?.(event.pointerId);
+      };
+      const endZoom = () => {
+        this.cameraControl.setHeldZoom(false);
+        zoomButton.setAttribute('aria-pressed', 'false');
+      };
+      zoomButton.addEventListener('pointerdown', beginZoom);
+      zoomButton.addEventListener('pointerup', endZoom);
+      zoomButton.addEventListener('pointercancel', endZoom);
+      zoomButton.addEventListener('lostpointercapture', endZoom);
+      window.addEventListener('pointerup', endZoom);
+      window.addEventListener('blur', endZoom);
+      zoomButton.addEventListener('contextmenu', (event) => event.preventDefault());
+    }
   }
 
   private readMouseSensitivity(): number {

@@ -32,6 +32,7 @@
         </section>
         <nav id="view-actions" aria-label="战术操作">
           <button id="home-view" type="button" title="恢复开局的地图位置与缩放"><kbd>H</kbd> 主视图</button>
+          <button id="zoom-hold" type="button" title="按住临时放大地图到 1.5 倍" aria-pressed="false"><kbd>＋</kbd> 放大</button>
           <button id="open-options" type="button" title="打开游戏选项"><kbd>Esc</kbd> 选项</button>
           <button id="back-to-menu" type="button" title="结束当前试玩并返回难度选择">退出战局</button>
         </nav>
@@ -57,7 +58,7 @@
           <p id="catalog-empty">该分类尚未解锁任何项目</p>
           <p id="build-hint">点击按钮开始放置 · 左键确认 · 右键 / Esc 取消</p>
         </aside>
-        <p id="controls-hint">左键选中 · 右键移动/攻击 · 方向键移动视角 · 中键拖拽平移 · H 回主视图 · D 展开基地车 · 空格暂停 · Shift+1/2/3 调速 · Ctrl+1~9 编队 · 1~9 复读</p>
+        <p id="controls-hint">左键选中 · 右键移动/攻击 · 方向键移动视角 · 中键拖拽平移 · 按住“放大”查看 1.5× · H 回主视图 · D 展开基地车 · 空格暂停 · Shift+1/2/3 调速 · Ctrl+1~9 编队 · 1~9 复读</p>
       </aside>
       <section id="options-dialog" class="options-dialog" hidden aria-label="游戏选项">
         <div class="options-window" role="dialog" aria-modal="true" aria-labelledby="options-title">
@@ -73,7 +74,7 @@
               <span><b>鼠标灵敏度</b><output id="mouse-sensitivity-value" for="mouse-sensitivity">100%</output></span>
               <input id="mouse-sensitivity" type="range" min="50" max="200" value="100" step="10" />
             </label>
-            <p class="options-help">调整中键拖拽和边缘滚屏的速度。视图比例保持原版红警式固定显示。设置会自动保存到本机。</p>
+            <p class="options-help">调整中键拖拽和边缘滚屏的速度。地图可按住侧栏“放大”临时切换到 1.5×。</p>
             <label class="options-range" for="master-volume">
               <span><b>战场音量</b><output id="master-volume-value" for="master-volume">42%</output></span>
               <input id="master-volume" type="range" min="0" max="100" value="42" step="5" />

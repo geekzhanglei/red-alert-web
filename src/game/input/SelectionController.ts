@@ -29,6 +29,8 @@ export class SelectionController {
   private box: Phaser.GameObjects.Rectangle;
   private canvas: HTMLCanvasElement;
   private activePointerId: number | null = null;
+  private lastClickAt = 0;
+  private lastClickEntityId: number | null = null;
 
   constructor(
     private scene: Phaser.Scene,
@@ -85,7 +87,23 @@ export class SelectionController {
         this.box.setVisible(false);
         this.selectBox(this.pressX, this.pressY, p.x, p.y);
       } else if (Math.hypot(p.x - this.pressX, p.y - this.pressY) < DRAG_THRESHOLD) {
-        this.selectAtScreen(p.x, p.y);
+        const hit = this.selectAtScreen(p.x, p.y);
+        const now = performance.now();
+        const isDoubleClick = Boolean(
+          hit
+          && hit.type === 'unit'
+          && hit.typeId === 'mcv'
+          && hit.id === this.lastClickEntityId
+          && now - this.lastClickAt <= 360,
+        );
+        if (isDoubleClick && hit) {
+          this.game.state.pendingCommands.push({ type: 'deploy', playerId: PLAYER_ID, entityId: hit.id });
+          this.lastClickAt = 0;
+          this.lastClickEntityId = null;
+        } else {
+          this.lastClickAt = now;
+          this.lastClickEntityId = hit?.id ?? null;
+        }
       }
     };
     const domCancel = (e: PointerEvent) => {
@@ -103,10 +121,11 @@ export class SelectionController {
   }
 
   /** 用屏幕坐标（DOM 事件原始 clientX/Y）选中。 */
-  private selectAtScreen(screenX: number, screenY: number): void {
+  private selectAtScreen(screenX: number, screenY: number): EntityState | null {
     const world = this.cam.getWorldPoint(screenX, screenY);
     const hit = this.findTopmostEntity(world.x, world.y, PLAYER_ID);
     this.game.state.selectedEntityIds = hit ? [hit.id] : [];
+    return hit;
   }
 
   /** DOM client 坐标 → Phaser 游戏画布坐标，兼容页面偏移与 CSS 缩放。 */

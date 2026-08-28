@@ -75,7 +75,9 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
         const key = textureKeyFor(e.typeId, e.ownerId, 'unit');
         if (this.scene.textures.exists(key)) {
           img.setTexture(key);
-          img.setFrame(getUnitFacingFrame(e.facing));
+          const facingFrame = getUnitFacingFrame(e.facing);
+          // MCV 素材的两个后视角按生成顺序相反，单独交换 NW/NE，避免转弯时像倒车。
+          img.setFrame(e.typeId === 'mcv' ? MCV_FRAME_BY_FACING[facingFrame] : facingFrame);
           img.setVisible(true);
           img.setPosition(s.x, s.y);
           const visual = UNIT_VISUALS[e.typeId] ?? DEFAULT_UNIT_VISUAL;
@@ -410,6 +412,7 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
 const ENEMY_TINT = 0xc94a55;
 
 const DEFAULT_UNIT_VISUAL = { width: 32, height: 32, originY: 0.92 };
+const MCV_FRAME_BY_FACING: readonly [number, number, number, number] = [0, 1, 3, 2];
 const UNIT_VISUALS: Record<string, { width: number; height: number; originY: number }> = {
   mcv: { width: 84, height: 66, originY: 0.95 },
   // 原创图集的接触点都在帧底部附近，统一锚到地面而不是锚到图像几何中心。
