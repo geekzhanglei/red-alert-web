@@ -3,13 +3,11 @@ import { Game } from '../core/Game';
 import { EntityState } from '../state/entities';
 import { PLAYER_ID } from '../state/GameState';
 import { tileAt } from '../state/map';
-import { gridToScreen, screenToGrid } from '../render/isometric';
+import { screenToGrid } from '../render/isometric';
 import { assignDestinations } from '../pathfinding/destinations';
-import { isEntityAnchorInRect, isPointInTileDiamond } from './selectionGeometry';
+import { isEntityAnchorInRect, isPointInTileDiamond, isPointInUnitHitBox } from './selectionGeometry';
 
 const DRAG_THRESHOLD = 5; // 像素：小于视为点击，大于视为框选
-const UNIT_CLICK_RADIUS = 22; // 地图世界像素：单位地面锚点的点击半径
-
 export interface SelectionControllerOptions {
   /** 小地图、建筑放置等模式可以临时接管指针，避免一次点击触发两套命令。 */
   isPointerBlocked?: (screenX: number, screenY: number) => boolean;
@@ -201,8 +199,7 @@ export class SelectionController {
   }
 
   private pointHitsUnit(wx: number, wy: number, e: EntityState): boolean {
-    const anchor = gridToScreen(e.x, e.y);
-    return Math.hypot(anchor.x - wx, anchor.y - wy) <= UNIT_CLICK_RADIUS;
+    return isPointInUnitHitBox(wx, wy, e);
   }
 
   /**
