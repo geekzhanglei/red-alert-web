@@ -92,6 +92,46 @@ describe('AI 战略层', () => {
     expect(defCmd).toBeDefined();
   });
 
+  it('玩家攻击 AI 建筑后，敌方战斗单位会回头反击攻击者', () => {
+    const game = new Game(createInitialGameState({ testUnits: false }));
+    game.state.map = makeFlatMap(50, 50);
+    const aiBase = spawnBuilding(game.state, 'base', 1, 20, 20);
+    const aiUnit = spawnUnit(game.state, 'infantry', 1, 10, 10);
+    const playerTank = spawnUnit(game.state, 'tank', 0, 20, 23);
+
+    game.state.pendingCommands.push({ type: 'attack', playerId: 0, entityId: playerTank.id, targetEntityId: aiBase.id });
+    for (let i = 0; i < 4; i++) game.update(TICK_MS);
+
+    expect(game.state.commandLog.some(
+      (entry) => entry.command.type === 'attack'
+        && entry.command.playerId === 1
+        && entry.command.entityId === aiUnit.id
+        && entry.command.targetEntityId === playerTank.id,
+    )).toBe(true);
+  });
+
+  it('建筑受袭时会打断敌方单位原来的进攻目标', () => {
+    const game = new Game(createInitialGameState({ testUnits: false }));
+    game.state.map = makeFlatMap(50, 50);
+    const aiBase = spawnBuilding(game.state, 'base', 1, 20, 20);
+    const aiUnit = spawnUnit(game.state, 'tank', 1, 10, 10);
+    const playerBase = spawnBuilding(game.state, 'base', 0, 5, 5);
+    const playerTank = spawnUnit(game.state, 'tank', 0, 20, 23);
+
+    aiUnit.attackTargetId = playerBase.id;
+    aiUnit.activity = 'attacking';
+    aiUnit.command = { type: 'attack', targetEntityId: playerBase.id };
+    game.state.pendingCommands.push({ type: 'attack', playerId: 0, entityId: playerTank.id, targetEntityId: aiBase.id });
+    for (let i = 0; i < 4; i++) game.update(TICK_MS);
+
+    expect(game.state.commandLog.some(
+      (entry) => entry.command.type === 'attack'
+        && entry.command.playerId === 1
+        && entry.command.entityId === aiUnit.id
+        && entry.command.targetEntityId === playerTank.id,
+    )).toBe(true);
+  });
+
   it('AI 有兵营且资金足够时会把训练加入统一命令流', () => {
     const game = new Game(createInitialGameState({ testUnits: false }));
     game.state.map = makeFlatMap(30, 30);

@@ -136,6 +136,16 @@ function ensureUnitProduction(state: GameState, pid: number): void {
 function tacticalAct(state: GameState): void {
   for (let pid = 1; pid < state.players.length; pid++) {
     const brain = getBrain(state, pid);
+    // 建筑受击是比普通视野威胁更高的事件：即使部队正在进攻或移动，也要立刻回头。
+    // 这避免玩家只要趁 AI 出兵时点射基地，AI 就完全不还手。
+    const defensiveTarget = anyBuildingUnderAttack(state, pid)
+      ? findNearestEnemyToOwnBuildings(state, pid)
+      : null;
+    if (defensiveTarget) {
+      brain.state = 'defend';
+      queueDefensiveResponse(state, pid, defensiveTarget);
+    }
+
     // Step 1 反制：AI 视野内玩家单位 ≥ 阈值 → 立即派所有 idle 战斗单位迎击
     const enemiesInView = countEnemyUnitsInView(state, pid);
     if (enemiesInView >= brain.threatThreshold) {
@@ -148,7 +158,8 @@ function tacticalAct(state: GameState): void {
             e.type === 'unit' &&
             e.ownerId === pid &&
             state.defs[e.typeId].weapon &&
-            e.activity === 'idle'
+            e.activity === 'idle' &&
+            !hasPendingAttackCommand(state, e.id)
           ) {
             state.pendingCommands.push({ type: 'attack', playerId: pid, entityId: e.id, targetEntityId: target.id });
           }
@@ -158,25 +169,23 @@ function tacticalAct(state: GameState): void {
       if (brain.state === 'develop' || brain.state === 'buildUp') brain.state = 'attack';
     }
 
-    // 原来的「己方建筑受袭 → 回防」逻辑保留
-    if (anyBuildingUnderAttack(state, pid)) {
-      const attacker = findNearestEnemyToOwnBuildings(state, pid);
-      if (attacker) {
-        for (const e of state.entitiesOrder.map((id) => state.entities[id])) {
-          if (
-            e &&
-            e.type === 'unit' &&
-            e.ownerId === pid &&
-            state.defs[e.typeId].weapon &&
-            e.attackTargetId == null &&
-            e.activity === 'idle'
-          ) {
-            state.pendingCommands.push({ type: 'attack', playerId: pid, entityId: e.id, targetEntityId: attacker.id });
-          }
-        }
-      }
-    }
   }
+}
+
+/** 建筑受袭时让所有有武器的单位切换到攻击者，包含正在移动/执行旧攻击命令的单位。 */
+function queueDefensiveResponse(state: GameState, pid: number, attacker: EntityState): void {
+  for (const id of state.entitiesOrder) {
+    const e = state.entities[id];
+    if (!e || e.type !== 'unit' || e.ownerId !== pid || !state.defs[e.typeId].weapon) continue;
+    if (e.attackTargetId === attacker.id || hasPendingAttackCommand(state, e.id, attacker.id)) continue;
+    state.pendingCommands.push({ type: 'attack', playerId: pid, entityId: e.id, targetEntityId: attacker.id });
+  }
+}
+
+function hasPendingAttackCommand(state: GameState, entityId: number, targetEntityId?: number): boolean {
+  return state.pendingCommands.some((command) => command.type === 'attack'
+    && command.entityId === entityId
+    && (targetEntityId === undefined || command.targetEntityId === targetEntityId));
 }
 
 function ensureBuildingConstruction(state: GameState, brain: AiBrainState, pid: number): void {
@@ -254,7 +263,7 @@ function anyBuildingUnderAttack(state: GameState, pid: number): boolean {
     const e = state.entities[id];
     if (!e || e.type !== 'building' || e.ownerId !== pid) continue;
     const def = state.buildingDefs[e.typeId];
-    if (e.hp < def.maxHp) return true;
+    if (e.hp < def.maxHp * e.hpMultiplier) return true;
   }
   return false;
 }
