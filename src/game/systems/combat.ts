@@ -39,8 +39,8 @@ export function updateCombat(state: GameState, dt: number): void {
     }
 
     // 单位也会像红警中的警戒状态一样自动接敌：敌人进入武器射程就停下移动并锁定最近目标。
-    // 这样坦克/步兵靠近后会自然互射，无需玩家逐个右键点名。
-    if (e.type === 'unit' && e.attackTargetId == null && e.activity === 'idle') {
+    // 移动中的单位同样会响应近距离威胁，避免编队从敌人身边穿过去却完全不还手。
+    if (e.type === 'unit' && e.attackTargetId == null && (e.activity === 'idle' || e.activity === 'moving')) {
       const target = findNearestEnemyInRange(state, e, weapon.range + AUTO_ACQUIRE_BUFFER);
       if (target) {
         e.attackTargetId = target.id;
@@ -140,7 +140,8 @@ function chase(state: GameState, e: EntityState, target: EntityState, range: num
   const nextX = moveX ? e.x + Math.sign(dx) * step : e.x;
   const nextY = moveX ? e.y : e.y + Math.sign(dy) * step;
   const nextTile = tileAt(state.map, Math.floor(nextX), Math.floor(nextY));
-  if (!nextTile || (nextTile.occupiedBy != null && nextTile.occupiedBy !== e.id)) return;
+  // 追击也必须遵守地形和占用规则，不能为了攻击目标穿过水面/岩石。
+  if (!nextTile || !nextTile.walkable || (nextTile.occupiedBy != null && nextTile.occupiedBy !== e.id)) return;
   e.x = nextX;
   e.y = nextY;
   e.facing = moveX ? (dx >= 0 ? 0 : Math.PI) : dy >= 0 ? Math.PI / 2 : -Math.PI / 2;

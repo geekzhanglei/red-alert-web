@@ -77,6 +77,33 @@ describe('战斗系统', () => {
     expect(countShots(game.state)).toBe(2);
   });
 
+  it('移动中的单位进入射程后会停下自动接敌', () => {
+    const { game, a, d } = makePair('tank', 'infantry', 2, 0);
+    a.activity = 'moving';
+    a.path = [{ x: d.x, y: d.y }];
+
+    updateCombat(game.state, TICK_MS / 1000);
+
+    expect(a.attackTargetId).toBe(d.id);
+    expect(a.activity).toBe('attacking');
+    expect(a.path).toEqual([]);
+  });
+
+  it('战斗追击不会穿过不可走地形', () => {
+    const { game, a, d } = makePair('tank', 'infantry', 4, 0);
+    const water = game.state.map.tiles[10 * game.state.map.width + 11];
+    water.terrain = 'water';
+    water.walkable = false;
+    water.buildable = false;
+    a.attackTargetId = d.id;
+    a.activity = 'attacking';
+
+    for (let i = 0; i < 80; i++) updateCombat(game.state, TICK_MS / 1000);
+
+    expect(a.x).toBeLessThan(11);
+    expect(water.occupiedBy).not.toBe(a.id);
+  });
+
   it('自动接敌按单位目标偏好选择装甲类型', () => {
     const game = new Game(createInitialGameState({ testUnits: false }));
     const tank = spawnUnit(game.state, 'tank', 0, 5, 5);
@@ -135,7 +162,8 @@ describe('战斗系统', () => {
   });
 
   it('移动命令打断攻击，攻击命令打断移动', () => {
-    const { game, a, d } = makePair('infantry', 'infantry', 1, 0);
+    // 目标放在射程外，验证移动命令本身能清除攻击；若敌人仍在射程内，移动中的单位会按警戒规则自动接敌。
+    const { game, a, d } = makePair('infantry', 'infantry', 4, 0);
     // 先攻击
     game.state.pendingCommands.push({ type: 'attack', playerId: 0, entityId: a.id, targetEntityId: d.id });
     game.update(TICK_MS);
