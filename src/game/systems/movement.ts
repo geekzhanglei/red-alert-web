@@ -1,6 +1,7 @@
 import { GameState } from '../state/GameState';
 import { EntityState, occupy } from '../state/entities';
 import { tileAt } from '../state/map';
+import { findPath } from '../pathfinding/AStar';
 
 /** 单位位置变化后同步占格：离开旧格释放，进入新格占用。 */
 function updateOccupancy(state: GameState, e: EntityState): void {
@@ -40,6 +41,11 @@ export function updateMovement(state: GameState, dt: number): void {
       const dy = wp.y - e.y;
       const dist = Math.hypot(dx, dy);
       if (dist < 0.05) {
+        if (!canEnterTile(state, e, wp.x, wp.y)) {
+          if (replanMove(state, e)) continue;
+          stopAtSafePosition(e);
+          break;
+        }
         // 到达当前航点
         e.x = wp.x;
         e.y = wp.y;
@@ -47,8 +53,18 @@ export function updateMovement(state: GameState, dt: number): void {
         updateOccupancy(state, e);
         continue;
       }
-      e.x += (dx / dist) * Math.min(step, dist); // 防冲过头
-      e.y += (dy / dist) * Math.min(step, dist);
+      const moveDistance = Math.min(step, dist); // 防冲过头
+      const nextX = e.x + (dx / dist) * moveDistance;
+      const nextY = e.y + (dy / dist) * moveDistance;
+      const nextTileX = Math.floor(nextX);
+      const nextTileY = Math.floor(nextY);
+      if (!canEnterTile(state, e, nextTileX, nextTileY)) {
+        if (replanMove(state, e)) continue;
+        stopAtSafePosition(e);
+        break;
+      }
+      e.x = nextX;
+      e.y = nextY;
       e.facing = Math.atan2(dy, dx);
       updateOccupancy(state, e);
       break;
@@ -59,4 +75,35 @@ export function updateMovement(state: GameState, dt: number): void {
       e.command = null;
     }
   }
+}
+
+/** 移动推进时再次校验，防止路径生成后建筑落成/单位停下造成穿模。 */
+function canEnterTile(state: GameState, e: EntityState, x: number, y: number): boolean {
+  const tile = tileAt(state.map, x, y);
+  if (!tile || !tile.walkable) return false;
+  if (tile.occupiedBy == null || tile.occupiedBy === e.id) return true;
+  const occupier = state.entities[tile.occupiedBy];
+  // 移动中的单位允许短暂穿插；建筑和静止单位必须保持实体边界。
+  return occupier?.type === 'unit' && occupier.activity === 'moving';
+}
+
+/** 路径中途失效时按原移动命令重新寻路，避免单位停在障碍边缘。 */
+function replanMove(state: GameState, e: EntityState): boolean {
+  const command = e.command;
+  if (!command || command.type !== 'move') return false;
+  const path = findPath(
+    state.map,
+    { x: e.tileX, y: e.tileY },
+    { x: command.targetX, y: command.targetY },
+    (x, y) => canEnterTile(state, e, x, y),
+  );
+  if (path.length === 0) return false;
+  e.path = path;
+  return true;
+}
+
+function stopAtSafePosition(e: EntityState): void {
+  e.path = [];
+  e.activity = 'idle';
+  e.command = null;
 }

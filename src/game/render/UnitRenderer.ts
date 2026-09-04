@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { GameState } from '../state/GameState';
 import { EntityState } from '../state/entities';
-import { gridToScreen } from './isometric';
+import { entitySpriteDepth, gridToScreen } from './isometric';
 import { FOG_VISIBLE, getFog } from '../state/visibility';
 import { textureKeyFor } from '../../assets/loadSprites';
 import { getUnitFacingFrame } from './unitFacing';
@@ -31,9 +31,10 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
 
   constructor(scene: Phaser.Scene) {
     super(scene);
-    this.setDepth(31);
+    // 单位图片按 x+y 动态排序；单位自身的选择框/血条 Graphics 在其上方。
+    this.setDepth(32);
     scene.add.existing(this);
-    this.groundLayer = scene.add.graphics().setDepth(29);
+    this.groundLayer = scene.add.graphics().setDepth(9);
   }
 
   update(state: GameState, alpha: number, viewerPlayerId = 0): void {
@@ -59,7 +60,7 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
 
     // 复用/创建 Image
     while (this.pool.length < drawable.length) {
-      const img = this.scene.add.image(0, 0, '__DEFAULT').setDepth(30);
+      const img = this.scene.add.image(0, 0, '__DEFAULT').setDepth(10);
       const glow = img.preFX?.addGlow(0x55caff, 2.5, 0.35, false) ?? null;
       glow?.setActive(false);
       this.pool.push(img);
@@ -72,6 +73,7 @@ export class UnitRenderer extends Phaser.GameObjects.Graphics {
         const { e, px, py } = drawable[i];
         const selected = state.selectedEntityIds.includes(e.id);
         const s = gridToScreen(px, py);
+        img.setDepth(entitySpriteDepth(px, py, state.map.width, state.map.height, 0.1));
         const key = textureKeyFor(e.typeId, e.ownerId, 'unit');
         if (this.scene.textures.exists(key)) {
           img.setTexture(key);

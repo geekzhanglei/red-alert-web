@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TILE_H, TILE_W, gridToScreen, screenToGrid } from './isometric';
+import { TILE_H, TILE_W, entitySpriteDepth, gridToScreen, screenToGrid } from './isometric';
 
 describe('等距坐标互转', () => {
   it('投影再反投影回到原点', () => {
@@ -27,5 +27,14 @@ describe('等距坐标互转', () => {
     expect(b.y - a.y).toBe(TILE_H / 2);
     expect(c.x - a.x).toBe(-TILE_W / 2);
     expect(c.y - a.y).toBe(TILE_H / 2);
+  });
+
+  it('实体深度遵循等距前后关系并保持单位略在同层建筑前', () => {
+    const behind = entitySpriteDepth(8, 8, 32, 32);
+    const ahead = entitySpriteDepth(9, 8, 32, 32);
+    const unit = entitySpriteDepth(8, 8, 32, 32, 0.1);
+    expect(ahead).toBeGreaterThan(behind);
+    expect(unit).toBeGreaterThan(behind);
+    expect(behind).toBeLessThan(28.1);
   });
 });

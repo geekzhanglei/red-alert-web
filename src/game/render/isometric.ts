@@ -31,3 +31,19 @@ export function screenToGrid(sx: number, sy: number): GridPoint {
   const b = sy / (TILE_H / 2);
   return { x: (a + b) / 2, y: (b - a) / 2 };
 }
+
+/**
+ * 等距实体的绘制深度：x+y 越大越靠近屏幕前方，应当越晚绘制。
+ * 统一把实体图片限制在地图特效层（<30），选中轮廓和雾层仍可覆盖其上。
+ */
+export function entitySpriteDepth(
+  x: number,
+  y: number,
+  mapWidth: number,
+  mapHeight: number,
+  bias = 0,
+): number {
+  const maxDiagonal = Math.max(1, mapWidth + mapHeight - 2);
+  const normalized = Math.max(0, Math.min(1, (x + y) / maxDiagonal));
+  return 10 + normalized * 18 + bias;
+}

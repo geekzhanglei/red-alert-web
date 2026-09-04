@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { TICK_MS } from '../core/GameLoop';
 import { Game } from '../core/Game';
 import { createInitialGameState } from '../state/GameState';
-import { spawnUnit } from '../state/entities';
+import { spawnBuilding, spawnUnit } from '../state/entities';
 import { updateMovement } from './movement';
 import { MapState } from '../state/map';
 
@@ -129,5 +129,22 @@ describe('寻路集成（命令 → A* → 沿路径移动）', () => {
     expect(game.state.map.tiles[1 * 5 + 3].occupiedBy).toBe(e.id);
     expect(e.tileX).toBe(3);
     expect(e.tileY).toBe(1);
+  });
+
+  it('路径生成后建筑落成，单位会重新寻路而不是进入建筑格', () => {
+    const game = new Game(createInitialGameState({ testUnits: false }));
+    game.state.map = makeMap(10, 10);
+    const e = spawnUnit(game.state, 'harvester', 0, 1, 1);
+    game.state.pendingCommands.push({ type: 'move', playerId: 0, entityId: e.id, targetX: 6, targetY: 1 });
+    game.update(TICK_MS); // 先生成一条穿过 (2,1) 的直线路径
+    const tower = spawnBuilding(game.state, 'refinery', 1, 2, 1);
+
+    for (let i = 0; i < 300; i++) game.update(TICK_MS);
+
+    expect(e.activity).toBe('idle');
+    expect(Math.round(e.x)).toBe(6);
+    expect(Math.round(e.y)).toBe(1);
+    expect(tower.occupiedTiles.some((tile) => tile.x === e.tileX && tile.y === e.tileY)).toBe(false);
+    expect(tower.occupiedTiles.every((tile) => game.state.map.tiles[tile.y * game.state.map.width + tile.x].occupiedBy === tower.id)).toBe(true);
   });
 });

@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { GameState } from '../state/GameState';
 import { EntityState } from '../state/entities';
-import { gridToScreen, TILE_H, TILE_W } from './isometric';
+import { entitySpriteDepth, gridToScreen, TILE_H, TILE_W } from './isometric';
 import { textureKeyFor } from '../../assets/loadSprites';
 import { FOG_VISIBLE, getFog } from '../state/visibility';
 
@@ -14,7 +14,9 @@ export class BuildingRenderer extends Phaser.GameObjects.Graphics {
 
   constructor(scene: Phaser.Scene) {
     super(scene);
-    this.setDepth(21);
+    // 建筑图片按实体 x+y 动态排序；这层 Graphics 保持在所有实体图片之上，
+    // 确保选中轮廓、血条和活动特效不会被自己的贴图盖住。
+    this.setDepth(31);
     scene.add.existing(this);
   }
 
@@ -30,7 +32,7 @@ export class BuildingRenderer extends Phaser.GameObjects.Graphics {
     drawable.sort((a, b) => a.y - b.y);
 
     while (this.pool.length < drawable.length) {
-      const img = this.scene.add.image(0, 0, '__DEFAULT').setDepth(20);
+      const img = this.scene.add.image(0, 0, '__DEFAULT').setDepth(10);
       this.pool.push(img);
     }
     for (let i = 0; i < this.pool.length; i++) {
@@ -39,6 +41,7 @@ export class BuildingRenderer extends Phaser.GameObjects.Graphics {
         const e = drawable[i];
         const def = state.buildingDefs[e.typeId];
         const s = gridToScreen(e.x, e.y);
+        img.setDepth(entitySpriteDepth(e.x, e.y, state.map.width, state.map.height));
         const key = textureKeyFor(e.typeId, e.ownerId, 'building');
         if (this.scene.textures.exists(key)) {
           img.setTexture(key);
