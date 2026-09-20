@@ -77,7 +77,7 @@ describe('战斗系统', () => {
     expect(countShots(game.state)).toBe(2);
   });
 
-  it('移动中的单位进入射程后会停下自动接敌', () => {
+  it('没有明确移动命令的单位进入射程后会自动接敌', () => {
     const { game, a, d } = makePair('tank', 'infantry', 2, 0);
     a.activity = 'moving';
     a.path = [{ x: d.x, y: d.y }];
@@ -162,8 +162,7 @@ describe('战斗系统', () => {
   });
 
   it('移动命令打断攻击，攻击命令打断移动', () => {
-    // 目标放在射程外，验证移动命令本身能清除攻击；若敌人仍在射程内，移动中的单位会按警戒规则自动接敌。
-    const { game, a, d } = makePair('infantry', 'infantry', 4, 0);
+    const { game, a, d } = makePair('infantry', 'infantry', 1, 0);
     // 先攻击
     game.state.pendingCommands.push({ type: 'attack', playerId: 0, entityId: a.id, targetEntityId: d.id });
     game.update(TICK_MS);
@@ -178,6 +177,25 @@ describe('战斗系统', () => {
     game.update(TICK_MS);
     expect(a.path).toEqual([]);
     expect(a.activity).toBe('attacking');
+  });
+
+  it('移动撤退时继续装填，但不会被自动警戒抢回攻击状态', () => {
+    const { game, a, d } = makePair('tank', 'infantry', 1, 0);
+    a.reloadLeft = 3;
+    a.command = { type: 'move', targetX: 5, targetY: 10 };
+    a.activity = 'moving';
+    a.path = [{ x: 9, y: 10 }];
+    d.reloadLeft = 999;
+    for (let i = 0; i < 3; i++) updateCombat(game.state, 0.05);
+    expect(a.reloadLeft).toBe(0);
+    expect(a.command.type).toBe('move');
+    expect(a.attackTargetId).toBeNull();
+    expect(countShots(game.state)).toBe(0);
+    a.command = null;
+    a.activity = 'idle';
+    updateCombat(game.state, 0.05);
+    expect(a.attackTargetId).toBe(d.id);
+    expect(countShots(game.state)).toBe(1);
   });
 
   it('攻击不存在的/友方目标视为无效命令', () => {

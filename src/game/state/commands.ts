@@ -181,6 +181,11 @@ export function applyMove(state: GameState, e: EntityState, targetX: number, tar
     { x: targetX, y: targetY },
     (x, y) => canMoveTo(state, e, x, y),
   );
+  // 从半格处改道时先沿格轴回到寻路起点，不能直接斜插到新路径。
+  if (path.length > 0 || (targetX === e.tileX && targetY === e.tileY)) {
+    if (e.x !== e.tileX || e.y !== e.tileY) path.unshift({ x: e.tileX, y: e.tileY });
+    if (e.x !== e.tileX && e.y !== e.tileY) path.unshift({ x: e.x, y: e.tileY });
+  }
   if (path.length === 0) {
     e.command = null;
     e.path = [];

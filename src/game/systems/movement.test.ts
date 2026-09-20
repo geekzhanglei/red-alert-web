@@ -5,6 +5,7 @@ import { createInitialGameState } from '../state/GameState';
 import { spawnBuilding, spawnUnit } from '../state/entities';
 import { updateMovement } from './movement';
 import { MapState } from '../state/map';
+import { applyMove } from '../state/commands';
 
 /** 手搓全草地图，可指定不可走格。 */
 function makeMap(width: number, height: number, blockers: { x: number; y: number }[] = []): MapState {
@@ -75,6 +76,25 @@ describe('移动系统', () => {
 });
 
 describe('寻路集成（命令 → A* → 沿路径移动）', () => {
+  it('半格处改道或遇到新建筑时，逐轴行走且不会重复重算卡死', () => {
+    const state = createInitialGameState({ testUnits: false });
+    state.map = makeMap(10, 10);
+    const e = spawnUnit(state, 'tank', 0, 4, 4);
+    e.x = 4.6;
+    e.y = 4.4; // 追击可能停在两轴均非整数的位置
+    applyMove(state, e, 1, 4);
+    const building = spawnBuilding(state, 'refinery', 0, 2, 4);
+    for (let i = 0; i < 400; i++) {
+      const { x, y } = e;
+      updateMovement(state, 0.05);
+      expect(Math.abs(e.x - x) < 1e-8 || Math.abs(e.y - y) < 1e-8).toBe(true);
+      expect(building.occupiedTiles.some((tile) => tile.x === e.tileX && tile.y === e.tileY)).toBe(false);
+    }
+    expect(e.x).toBe(1);
+    expect(e.y).toBe(4);
+    expect(e.activity).toBe('idle');
+  });
+
   it('命令应用时算出绕墙路径，单位沿路径到达目标', () => {
     const game = new Game(createInitialGameState({ testUnits: false }));
     game.state.map = makeMap(8, 8, [{ x: 3, y: 1 }, { x: 3, y: 2 }, { x: 3, y: 3 }, { x: 3, y: 4 }]);

@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { TICK_MS } from '../core/GameLoop';
 import { Game } from '../core/Game';
 import { createInitialGameState } from '../state/GameState';
-import { spawnBuilding, spawnUnit } from '../state/entities';
+import { removeEntity, spawnBuilding, spawnUnit } from '../state/entities';
 import { canAfford, changeMoney } from '../state/players';
 import { canPlace, processCommands } from '../state/commands';
 import { updateCombat } from './combat';
 import { ORE_UNIT_VALUE, updateEconomy } from './economy';
 import { MapState } from '../state/map';
+import { updateMovement } from './movement';
 
 function makeMap(width: number, height: number): MapState {
   const tiles = new Array(width * height);
@@ -45,6 +46,42 @@ describe('资金接口', () => {
 });
 
 describe('采矿车循环', () => {
+  it('最后一块矿耗尽也会把不足一车的货物送回矿场', () => {
+    const state = createInitialGameState({ testUnits: false });
+    state.map = makeMap(10, 10);
+    spawnBuilding(state, 'refinery', 0, 1, 1);
+    const h = spawnUnit(state, 'harvester', 0, 6, 1);
+    setOre(state.map, 6, 1);
+    state.map.tiles[16].oreAmount = 7;
+    const before = state.players[0].money;
+    for (let i = 0; i < 300; i++) {
+      updateEconomy(state, 0.05);
+      updateMovement(state, 0.05);
+    }
+    expect(h.cargo).toBe(0);
+    expect(state.players[0].money).toBe(before + 7 * ORE_UNIT_VALUE);
+  });
+
+  it('卸货前矿场被毁不会凭空收款，重建后保留的货物可以正常入账', () => {
+    const state = createInitialGameState({ testUnits: false });
+    state.map = makeMap(10, 10);
+    const refinery = spawnBuilding(state, 'refinery', 0, 1, 1);
+    const h = spawnUnit(state, 'harvester', 0, 3, 1);
+    h.cargo = 100;
+    h.harvestPhase = 'unloading';
+    const before = state.players[0].money;
+    removeEntity(state, refinery.id);
+    for (let i = 0; i < 5; i++) updateEconomy(state, 0.05);
+    expect(state.players[0].money).toBe(before);
+    expect(h.cargo).toBe(100);
+    expect(h.harvestPhase).toBe('seekingRefinery');
+    spawnBuilding(state, 'refinery', 0, 1, 1);
+    updateEconomy(state, 0.05);
+    updateEconomy(state, 0.05);
+    expect(h.cargo).toBe(0);
+    expect(state.players[0].money).toBe(before + 100 * ORE_UNIT_VALUE);
+  });
+
   it('默认战局以 MCV 开局并生成可采集的黄金矿脉', () => {
     const state = createInitialGameState();
     const mcv = state.entitiesOrder
@@ -89,7 +126,8 @@ describe('采矿车循环', () => {
     // 直接塞满 cargo，下一次应直奔矿场卸货
     h.cargo = 100;
     h.harvestPhase = 'mining';
-    for (let i = 0; i < 200; i++) game.update(TICK_MS);
+    // 在首次卸货时检查，不能等到下一轮已经开始采矿才断言空仓。
+    for (let i = 0; i < 200 && game.state.players[0].money === 5000; i++) game.update(TICK_MS);
     expect(h.cargo).toBe(0); // 已卸货
     expect(game.state.players[0].money).toBe(5000 + 100 * ORE_UNIT_VALUE);
   });

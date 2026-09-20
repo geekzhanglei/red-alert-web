@@ -1,7 +1,7 @@
 import { GameState } from '../state/GameState';
 import { EntityState, occupy } from '../state/entities';
 import { tileAt } from '../state/map';
-import { findPath } from '../pathfinding/AStar';
+import { applyMove } from '../state/commands';
 
 /** 单位位置变化后同步占格：离开旧格释放，进入新格占用。 */
 function updateOccupancy(state: GameState, e: EntityState): void {
@@ -17,7 +17,7 @@ function updateOccupancy(state: GameState, e: EntityState): void {
 
 /**
  * 移动系统：沿寻路航点（e.path）推进坐标。单位依次到达每个航点，走完最后一个后回 idle。
- * 遍历顺序固定走 entitiesOrder（决策四），到达阈值取 0.05 而非 0，避免浮点误差永远到不了。
+ * 遍历顺序固定走 entitiesOrder（决策四），航点附近仅容忍浮点误差，防止提前切角。
  * 阶段二之前的直线移动已由「path 单航点=目标」覆盖，本系统只认路径。
  */
 export function updateMovement(state: GameState, dt: number): void {
@@ -40,10 +40,9 @@ export function updateMovement(state: GameState, dt: number): void {
       const dx = wp.x - e.x;
       const dy = wp.y - e.y;
       const dist = Math.hypot(dx, dy);
-      if (dist < 0.05) {
-        if (!canEnterTile(state, e, wp.x, wp.y)) {
-          if (replanMove(state, e)) continue;
-          stopAtSafePosition(e);
+      if (dist < 1e-8) {
+        if (!canEnterTile(state, e, Math.floor(wp.x), Math.floor(wp.y))) {
+          if (!replanMove(state, e)) stopAtSafePosition(e);
           break;
         }
         // 到达当前航点
@@ -59,8 +58,7 @@ export function updateMovement(state: GameState, dt: number): void {
       const nextTileX = Math.floor(nextX);
       const nextTileY = Math.floor(nextY);
       if (!canEnterTile(state, e, nextTileX, nextTileY)) {
-        if (replanMove(state, e)) continue;
-        stopAtSafePosition(e);
+        if (!replanMove(state, e)) stopAtSafePosition(e);
         break;
       }
       e.x = nextX;
@@ -91,15 +89,9 @@ function canEnterTile(state: GameState, e: EntityState, x: number, y: number): b
 function replanMove(state: GameState, e: EntityState): boolean {
   const command = e.command;
   if (!command || command.type !== 'move') return false;
-  const path = findPath(
-    state.map,
-    { x: e.tileX, y: e.tileY },
-    { x: command.targetX, y: command.targetY },
-    (x, y) => canEnterTile(state, e, x, y),
-  );
-  if (path.length === 0) return false;
-  e.path = path;
-  return true;
+  // 每 tick 最多重算一次；共用普通移动的半格对齐，避免同一帧反复撞向障碍。
+  applyMove(state, e, command.targetX, command.targetY);
+  return e.path.length > 0;
 }
 
 function stopAtSafePosition(e: EntityState): void {

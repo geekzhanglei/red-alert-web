@@ -23,6 +23,10 @@ export function updateEconomy(state: GameState, dt: number): void {
 }
 
 function updateHarvester(state: GameState, h: EntityState, dt: number): void {
+  const def = state.defs[h.typeId] as UnitDefinition;
+  if (h.cargo >= def.cargoCapacity && h.harvestPhase !== 'unloading') {
+    h.harvestPhase = 'seekingRefinery';
+  }
   switch (h.harvestPhase) {
     case 'idle':
       seekOre(state, h);
@@ -43,21 +47,22 @@ function updateHarvester(state: GameState, h: EntityState, dt: number): void {
 }
 
 function seekOre(state: GameState, h: EntityState): void {
+  if (h.activity === 'moving') return; // 到达矿格后才能开始采集
   const ore = findNearestOre(state, h);
   if (!ore) {
-    h.harvestPhase = 'idle'; // 地图没矿了，待命
+    h.harvestPhase = h.cargo > 0 ? 'seekingRefinery' : 'idle';
     return;
   }
   if (h.tileX === ore.x && h.tileY === ore.y) {
     h.harvestPhase = 'mining';
     return;
   }
-  if (h.activity === 'moving') return; // 还在路上
   h.harvestPhase = 'seekingOre';
   applyMove(state, h, ore.x, ore.y);
 }
 
 function mine(state: GameState, h: EntityState, dt: number): void {
+  if (h.activity === 'moving') return;
   const tile = tileAt(state.map, h.tileX, h.tileY);
   if (!tile || tile.terrain !== 'ore' || tile.oreAmount <= 0) {
     h.harvestPhase = 'seekingOre'; // 矿被挖完或被挤开，换矿
@@ -76,23 +81,14 @@ function mine(state: GameState, h: EntityState, dt: number): void {
   }
   if (h.cargo >= def.cargoCapacity) {
     h.harvestPhase = 'seekingRefinery';
-    const refinery = findNearestRefinery(state, h);
-    if (!refinery) {
-      h.harvestPhase = 'idle'; // 没有矿场卸货
-      return;
-    }
-    const spot = findUnloadSpot(state, h, refinery);
-    if (spot) applyMove(state, h, spot.x, spot.y);
+    seekRefinery(state, h);
   }
 }
 
 function seekRefinery(state: GameState, h: EntityState): void {
   if (h.activity === 'moving') return;
   const refinery = findNearestRefinery(state, h);
-  if (!refinery) {
-    h.harvestPhase = 'idle';
-    return;
-  }
+  if (!refinery) return; // 保留货物并等待矿场重建
   if (isAdjacentToBuilding(state, h, refinery)) {
     h.harvestPhase = 'unloading';
     return;
@@ -102,6 +98,11 @@ function seekRefinery(state: GameState, h: EntityState): void {
 }
 
 function unload(state: GameState, h: EntityState): void {
+  const refinery = findNearestRefinery(state, h);
+  if (h.activity === 'moving' || !refinery || !isAdjacentToBuilding(state, h, refinery)) {
+    h.harvestPhase = 'seekingRefinery';
+    return;
+  }
   changeMoney(state, h.ownerId, h.cargo * ORE_UNIT_VALUE);
   h.cargo = 0;
   h.harvestPhase = 'seekingOre';

@@ -25,6 +25,8 @@ export function updateCombat(state: GameState, dt: number): void {
     if (!e) continue;
     const weapon = weaponOf(state, e);
     if (!weapon) continue; // 无武器单位（如采矿车）不参与战斗
+    const reloading = e.reloadLeft > 0;
+    if (reloading) e.reloadLeft--; // 行军、追击和待命期间也正常装填
 
     // 防御建筑没有移动指令：在射程内自动选择最近敌人，目标离开射程后重新搜索。
     if (e.type === 'building') {
@@ -38,9 +40,8 @@ export function updateCombat(state: GameState, dt: number): void {
       if (e.attackTargetId == null) continue;
     }
 
-    // 单位也会像红警中的警戒状态一样自动接敌：敌人进入武器射程就停下移动并锁定最近目标。
-    // 移动中的单位同样会响应近距离威胁，避免编队从敌人身边穿过去却完全不还手。
-    if (e.type === 'unit' && e.attackTargetId == null && (e.activity === 'idle' || e.activity === 'moving')) {
+    // 自动警戒不能抢占明确的移动指令，否则玩家无法撤退或调整阵形。
+    if (e.type === 'unit' && e.command?.type !== 'move' && e.attackTargetId == null && (e.activity === 'idle' || e.activity === 'moving')) {
       const target = findNearestEnemyInRange(state, e, weapon.range + AUTO_ACQUIRE_BUFFER);
       if (target) {
         e.attackTargetId = target.id;
@@ -82,10 +83,7 @@ export function updateCombat(state: GameState, dt: number): void {
       continue;
     }
 
-    if (e.reloadLeft > 0) {
-      e.reloadLeft--;
-      continue;
-    }
+    if (reloading) continue;
     fire(state, e, target, weapon);
     e.reloadLeft = weapon.reloadTicks;
     e.activity = 'attacking';
@@ -166,8 +164,8 @@ function fire(state: GameState, e: EntityState, target: EntityState, weapon: Wea
   const tgtDef = target.type === 'building' ? state.buildingDefs[target.typeId] : state.defs[target.typeId];
   const effTargetMaxHp = tgtDef.maxHp * target.hpMultiplier;
   const damage = weapon.damage * mod * e.damageMultiplier;
-  // 等比例缩放：hp / effMaxHp = hp - damage / defMaxHp
-  const newHp = target.hp - damage * (tgtDef.maxHp / effTargetMaxHp);
+  // 升级已增加实际生命值，不能再除以血量倍率，造成双重减伤。
+  const newHp = target.hp - damage;
   target.hp = Math.round(newHp);
   state.events.push({ type: 'shot', fromX: e.x, fromY: e.y, toX: target.x, toY: target.y, sourceTypeId: e.typeId });
   state.events.push({

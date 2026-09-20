@@ -27,7 +27,7 @@ describe('升级命令（docs/10-selection-panel.md）', () => {
     expect(u.hp).toBe(50 + 25);
   });
 
-  it('升级后受到伤害按合成 effectiveMaxHp 比例扣血', () => {
+  it('升级血量不会额外叠加隐形减伤', () => {
     const game = makeGame();
     const a = spawnUnit(game.state, 'tank', 0, 10, 10);
     const d = spawnUnit(game.state, 'infantry', 1, 12, 10); // 在坦克射程内
@@ -37,6 +37,7 @@ describe('升级命令（docs/10-selection-panel.md）', () => {
     d.upgraded = true;
     d.damageMultiplier = 1.5;
     d.hpMultiplier = 1.5;
+    d.hp = game.state.defs.infantry.maxHp * d.hpMultiplier;
     const before = d.hp;
     a.command = { type: 'attack', targetEntityId: d.id };
     a.attackTargetId = d.id;
@@ -44,10 +45,7 @@ describe('升级命令（docs/10-selection-panel.md）', () => {
     a.reloadLeft = 0;
     game.update(TICK_MS);
     // 升级坦克对升级轻甲的伤害 = 15 * 0.75(轻甲) * 1.5 = 16.875
-    // 等比例：newHp = before - 16.875 * (def50/75) = before - 11.25 = 50-11.25=38.75 → 39
-    expect(d.hp).toBeLessThan(before);
-    expect(d.hp).toBeGreaterThanOrEqual(38);
-    expect(d.hp).toBeLessThanOrEqual(40);
+    expect(d.hp).toBe(Math.round(before - 16.875));
   });
 
   it('钱不够：命令被忽略，不扣钱、不升级', () => {
